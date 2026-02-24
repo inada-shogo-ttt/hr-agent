@@ -1,0 +1,296 @@
+import { NextRequest } from "next/server";
+import { runManagerAgent } from "@/lib/agents/manager";
+import { runTrendResearchAgent } from "@/lib/agents/trend-research";
+import { runTrendAnalysisAgent } from "@/lib/agents/trend-analysis";
+import { runReferenceSelectionAgent } from "@/lib/agents/reference-selection";
+import { runManuscriptWritingAgent } from "@/lib/agents/manuscript-writing";
+import { runThumbnailGenerationAgent } from "@/lib/agents/thumbnail-generation";
+import { runFactCheckAgent } from "@/lib/agents/fact-check";
+import { JobPostingInput } from "@/types/job-posting";
+import { AllPlatformPostings } from "@/types/platform";
+import { SSEEvent, AgentId } from "@/lib/agents/types";
+
+export const runtime = "nodejs";
+export const maxDuration = 300; // 5分
+
+function createSSEMessage(event: SSEEvent): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+function sendEvent(
+  controller: ReadableStreamDefaultController,
+  event: SSEEvent
+): void {
+  controller.enqueue(new TextEncoder().encode(createSSEMessage(event)));
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const jobPostingInput = body as JobPostingInput;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const now = () => new Date().toISOString();
+
+      const startAgent = (agentId: AgentId, message: string) => {
+        sendEvent(controller, {
+          type: "agent_start",
+          agentId,
+          message,
+          timestamp: now(),
+        });
+      };
+
+      const progressAgent = (agentId: AgentId, message: string, data?: unknown) => {
+        sendEvent(controller, {
+          type: "agent_progress",
+          agentId,
+          message,
+          data,
+          timestamp: now(),
+        });
+      };
+
+      const completeAgent = (agentId: AgentId, message: string, data?: unknown) => {
+        sendEvent(controller, {
+          type: "agent_complete",
+          agentId,
+          message,
+          data,
+          timestamp: now(),
+        });
+      };
+
+      const errorAgent = (agentId: AgentId, message: string) => {
+        sendEvent(controller, {
+          type: "agent_error",
+          agentId,
+          message,
+          timestamp: now(),
+        });
+      };
+
+      try {
+        // Step 1: Manager Agent
+        startAgent("manager", "要件の確認・チェックを開始します");
+        const managerOutput = await runManagerAgent({ jobPostingInput });
+        completeAgent("manager", "要件確認完了", {
+          summary: managerOutput.summary,
+          isValid: managerOutput.isValid,
+        });
+
+        if (!managerOutput.isValid) {
+          progressAgent(
+            "manager",
+            `入力情報に問題があります: ${managerOutput.issues.join(", ")}`,
+            { issues: managerOutput.issues }
+          );
+        }
+
+        // Step 2: Trend Research Agent
+        startAgent("trend-research", "求人トレンドのWeb調査を開始します");
+        const trendResearch = await runTrendResearchAgent({
+          industry: jobPostingInput.common.industry,
+          jobCategory: jobPostingInput.common.jobTitle,
+          prefecture: jobPostingInput.common.prefecture,
+          employmentType: jobPostingInput.common.employmentType,
+        });
+        completeAgent("trend-research", "トレンド調査完了", {
+          resultCount: trendResearch.results.length,
+          summary: trendResearch.summary,
+        });
+
+        // Step 3: Trend Analysis Agent
+        startAgent("trend-analysis", "トレンドデータの分析を開始します");
+        const trendAnalysis = await runTrendAnalysisAgent({
+          trendResearch,
+          jobPostingInput,
+        });
+        completeAgent("trend-analysis", "トレンド分析完了", {
+          popularityFactors: trendAnalysis.popularityFactors,
+          recommendedKeywords: trendAnalysis.recommendedKeywords,
+        });
+
+        // Step 4: Reference Selection Agent
+        startAgent("reference-selection", "参考原稿の選定を開始します");
+        const referenceSelection = await runReferenceSelectionAgent({
+          trendAnalysis,
+          jobPostingInput,
+        });
+        completeAgent("reference-selection", "参考原稿選定完了", {
+          referencesCount: referenceSelection.selectedReferences.length,
+        });
+
+        // Step 5 & 6: Manuscript Writing + Thumbnail Generation (並列)
+        startAgent("manuscript-writing", "3媒体の求人原稿を執筆開始します");
+        startAgent("thumbnail-generation", "サムネイル生成を開始します");
+
+        const [manuscriptOutput, thumbnailOutput] = await Promise.all([
+          runManuscriptWritingAgent({
+            jobPostingInput,
+            managerOutput,
+            trendAnalysis,
+            referenceSelection,
+          }),
+          runThumbnailGenerationAgent({
+            jobPostingInput,
+            manuscript: {
+              indeed: {
+                jobTitle: jobPostingInput.common.jobTitle,
+                catchphrase: "生成中...",
+                jobDescription: jobPostingInput.common.jobDescription,
+                appealPoints: "",
+                requirements: jobPostingInput.common.requirements,
+                holidays: jobPostingInput.common.holidays,
+                benefits: jobPostingInput.common.benefits,
+                access: "",
+                socialInsurance: jobPostingInput.common.socialInsurance.join(", "),
+              },
+              airwork: {
+                jobTitle: jobPostingInput.common.jobTitle,
+                catchphrase: "生成中...",
+                jobDescription: jobPostingInput.common.jobDescription,
+                requirements: jobPostingInput.common.requirements,
+                selectionProcess: "",
+              },
+              jobmedley: {
+                appealTitle: "生成中...",
+                appealText: "",
+                jobDescription: jobPostingInput.common.jobDescription,
+                employmentTypeAndSalary: "",
+                trainingSystem: "",
+                workingHours: jobPostingInput.common.workingHours,
+                requirements: jobPostingInput.common.requirements,
+                welcomeRequirements: "",
+                access: "",
+                selectionProcess: "",
+              },
+            },
+          }),
+        ]);
+
+        completeAgent("manuscript-writing", "原稿執筆完了（3媒体）");
+        completeAgent("thumbnail-generation", thumbnailOutput.message, {
+          thumbnailCount: thumbnailOutput.thumbnailUrls.length,
+          status: thumbnailOutput.generationStatus,
+        });
+
+        // Step 7: Fact Check Agent
+        startAgent("fact-check", "ファクトチェック・自動修正を開始します");
+        const factCheckOutput = await runFactCheckAgent({
+          jobPostingInput,
+          manuscript: manuscriptOutput,
+        });
+        completeAgent("fact-check", factCheckOutput.summary, {
+          issueCount: factCheckOutput.issues.length,
+          isClean: factCheckOutput.isClean,
+        });
+
+        // Step 8: Platform Formatter (final assembly)
+        const { common } = jobPostingInput;
+        const finalManuscript = factCheckOutput.correctedManuscript;
+
+        const countChars = (text: string) => text.length;
+
+        const finalOutput: AllPlatformPostings = {
+          indeed: {
+            companyName: common.companyName,
+            jobTitle: finalManuscript.indeed.jobTitle,
+            catchphrase: finalManuscript.indeed.catchphrase,
+            numberOfHires: common.numberOfHires ? `${common.numberOfHires}名` : "若干名",
+            location: `${common.prefecture}${common.city}${common.address || ""}`,
+            employmentType: common.employmentType,
+            salary: `${common.salaryType} ${common.salaryMin.toLocaleString()}円${common.salaryMax ? `〜${common.salaryMax.toLocaleString()}円` : ""}`,
+            workingHours: common.workingHours,
+            socialInsurance: finalManuscript.indeed.socialInsurance,
+            probationPeriod: finalManuscript.indeed.probationPeriod,
+            jobDescription: finalManuscript.indeed.jobDescription,
+            appealPoints: finalManuscript.indeed.appealPoints,
+            requirements: finalManuscript.indeed.requirements,
+            holidays: finalManuscript.indeed.holidays,
+            access: finalManuscript.indeed.access,
+            benefits: finalManuscript.indeed.benefits,
+            thumbnailUrls: thumbnailOutput.thumbnailUrls,
+            recruitmentBudget: jobPostingInput.indeed?.recruitmentBudget?.toString(),
+            charCounts: {
+              jobTitle: countChars(finalManuscript.indeed.jobTitle),
+              catchphrase: countChars(finalManuscript.indeed.catchphrase),
+              jobDescription: countChars(finalManuscript.indeed.jobDescription),
+              appealPoints: countChars(finalManuscript.indeed.appealPoints),
+              requirements: countChars(finalManuscript.indeed.requirements),
+            },
+          },
+          airwork: {
+            jobTitle: finalManuscript.airwork.jobTitle,
+            jobDescription: finalManuscript.airwork.jobDescription,
+            location: `${common.prefecture}${common.city}`,
+            requirements: finalManuscript.airwork.requirements,
+            catchphrase: finalManuscript.airwork.catchphrase,
+            numberOfHires: common.numberOfHires ? `${common.numberOfHires}名` : "若干名",
+            salary: `${common.salaryType} ${common.salaryMin.toLocaleString()}円${common.salaryMax ? `〜${common.salaryMax.toLocaleString()}円` : ""}`,
+            workStyle: jobPostingInput.airwork?.workStyle || "出社必須",
+            holidays: common.holidays,
+            socialInsurance: common.socialInsurance.join(", "),
+            benefits: common.benefits,
+            selectionProcess: finalManuscript.airwork.selectionProcess,
+            thumbnailUrls: thumbnailOutput.thumbnailUrls,
+            charCounts: {
+              jobTitle: countChars(finalManuscript.airwork.jobTitle),
+              catchphrase: countChars(finalManuscript.airwork.catchphrase),
+              jobDescription: countChars(finalManuscript.airwork.jobDescription),
+              requirements: countChars(finalManuscript.airwork.requirements),
+            },
+          },
+          jobmedley: {
+            appealTitle: finalManuscript.jobmedley.appealTitle,
+            appealText: finalManuscript.jobmedley.appealText,
+            jobDescription: finalManuscript.jobmedley.jobDescription,
+            employmentTypeAndSalary: finalManuscript.jobmedley.employmentTypeAndSalary,
+            benefits: common.benefits,
+            trainingSystem: finalManuscript.jobmedley.trainingSystem,
+            workingHours: finalManuscript.jobmedley.workingHours,
+            holidays: common.holidays,
+            requirements: finalManuscript.jobmedley.requirements,
+            welcomeRequirements: finalManuscript.jobmedley.welcomeRequirements,
+            access: finalManuscript.jobmedley.access,
+            selectionProcess: finalManuscript.jobmedley.selectionProcess,
+            charCounts: {
+              appealTitle: countChars(finalManuscript.jobmedley.appealTitle),
+              appealText: countChars(finalManuscript.jobmedley.appealText),
+              jobDescription: countChars(finalManuscript.jobmedley.jobDescription),
+            },
+          },
+          thumbnailUrls: thumbnailOutput.thumbnailUrls,
+          generatedAt: now(),
+        };
+
+        // ワークフロー完了
+        sendEvent(controller, {
+          type: "workflow_complete",
+          agentId: "platform-formatter",
+          message: "全媒体の求人原稿が完成しました",
+          data: finalOutput,
+          timestamp: now(),
+        });
+      } catch (error) {
+        console.error("[team-a] Workflow error:", error);
+        sendEvent(controller, {
+          type: "workflow_error",
+          agentId: "manager",
+          message: error instanceof Error ? error.message : "ワークフロー実行中にエラーが発生しました",
+          timestamp: now(),
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}

@@ -1,0 +1,6 @@
+{
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/draw.io-mcp"]
+    }
+  }

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/Users/inadashouware/Documents/【 採用エージェント 】\" && npm install prisma @prisma/client 2>&1 | tail -5)",
+      "Bash(cd \"/Users/inadashouware/Documents/【 採用エージェント 】\" && npx prisma migrate dev --name init 2>&1 | tail -10)"
+    ]
+  }
+}
