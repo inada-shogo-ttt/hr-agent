@@ -3,6 +3,8 @@
 import { ExistingPostingFields, IndeedMetrics, AirWorkMetrics, ImprovementDiff, IssueSummary, BudgetRecommendation } from "@/types/team-b";
 import { Platform } from "@/types/platform";
 import { AgentStatus } from "@/lib/agents/types";
+import { PlatformThumbnails } from "@/lib/nanobanana";
+import { ReferencePostingData } from "@/types/reference";
 
 // Team B エージェント識別子
 export type TeamBAgentId =
@@ -76,6 +78,7 @@ export interface TextImprovementInput {
   existingPosting: ExistingPostingFields;
   manuscriptAnalysis: ManuscriptAnalysisOutput;
   metricsIssues?: IssueSummary[];
+  userReferences?: ReferencePostingData[];
 }
 
 export interface TextImprovementOutput {
@@ -89,10 +92,16 @@ export interface DesignImprovementInput {
   existingPosting: ExistingPostingFields;
   improvedPosting: ExistingPostingFields;
   historyContext?: unknown[];
+  visualStyle?: {
+    uniformDescription?: string;
+    colorPalette?: string;
+    sceneDescription?: string;
+  };
 }
 
 export interface DesignImprovementOutput {
-  thumbnailUrls: string[];
+  platformThumbnails: PlatformThumbnails;
+  thumbnailUrls: string[]; // deprecated, 後方互換用
   generationStatus: "success" | "placeholder" | "error";
   message: string;
 }

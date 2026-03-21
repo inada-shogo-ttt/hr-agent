@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Plus, Briefcase, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronLeft, Plus, Briefcase, ChevronRight, Trash2, BookOpen } from "lucide-react";
 
 interface JobWithLatest {
   id: string;
@@ -57,12 +57,20 @@ export default function JobsPage() {
               登録済みの求人一覧です。求人を選択してTeam A（新規作成）またはTeam B（改善）を実行できます。
             </p>
           </div>
-          <Link href="/jobs/new">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              新規求人を登録
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/references">
+              <Button variant="outline">
+                <BookOpen className="w-4 h-4 mr-2" />
+                参考原稿
+              </Button>
+            </Link>
+            <Link href="/jobs/new">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                新規求人を登録
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {loading ? (

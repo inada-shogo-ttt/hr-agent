@@ -1,5 +1,7 @@
 // 各媒体の出力フォーマット型
 
+import { PlatformThumbnails } from "@/lib/nanobanana";
+
 // Indeed 出力型
 export interface IndeedPosting {
   // 必須フィールド
@@ -76,6 +78,7 @@ export interface JobMedleyPosting {
   welcomeRequirements: string;
   access: string;
   selectionProcess: string;
+  thumbnailUrls: string[];
 
   charCounts: {
     appealTitle: number;
@@ -84,14 +87,81 @@ export interface JobMedleyPosting {
   };
 }
 
+// ハローワーク 出力型
+// ※ハローワークは全角入力必須・絵文字禁止
+export interface HelloWorkPosting {
+  // 求人事業所
+  companyName: string;
+  companyAddress: string;
+  workLocation: string;
+  smokingPolicy: string;
+
+  // 仕事の内容
+  jobTitle: string;
+  jobDescription: string;
+  employmentType: string;
+  employmentPeriod: string;
+  contractRenewal: string;
+
+  // 賃金・手当
+  wageType: string;
+  wageAmount: string;
+  allowances: string;
+  commutingAllowance: string;
+  bonus: string;
+  raise: string;
+
+  // 労働時間
+  workingHours: string;
+  overtime: string;
+  breakTime: string;
+  holidays: string;
+  annualLeave: string;
+
+  // その他の労働条件
+  insurance: string;
+  pension: string;
+  trialPeriod: string;
+  specialNotes: string;
+
+  // 必要な経験等
+  requirements: string;
+  requiredLicenses: string;
+  ageRestriction: string;
+
+  // 選考等
+  numberOfHires: string;
+  selectionMethod: string;
+  applicationDocuments: string;
+  selectionNotification: string;
+
+  // 求人に関する特記事項
+  remarks: string;
+
+  // 文字数チェック
+  charCounts: {
+    jobTitle: number;
+    jobDescription: number;
+    requirements: number;
+    remarks: number;
+  };
+}
+
 // プラットフォーム識別子
-export type Platform = "indeed" | "airwork" | "jobmedley";
+export type Platform = "indeed" | "airwork" | "jobmedley" | "hellowork";
 
 // 全媒体の出力型
 export interface AllPlatformPostings {
   indeed: IndeedPosting;
   airwork: AirWorkPosting;
   jobmedley: JobMedleyPosting;
-  thumbnailUrls: string[];
+  hellowork: HelloWorkPosting;
+  thumbnailUrls: string[];           // deprecated, 後方互換用
+  platformThumbnails?: PlatformThumbnails; // 媒体別サムネイル
+  visualStyle?: {                    // Team B で引き継ぐビジュアルスタイル
+    uniformDescription?: string;
+    colorPalette?: string;
+    sceneDescription?: string;
+  };
   generatedAt: string;
 }

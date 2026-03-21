@@ -7,6 +7,8 @@ import { runDesignImprovementAgent } from "@/lib/agents/team-b/design-improvemen
 import { runBudgetOptimizationAgent } from "@/lib/agents/team-b/budget-optimization";
 import { TeamBInput, TeamBOutput, IndeedMetrics } from "@/types/team-b";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
+import { ReferencePostingData } from "@/types/reference";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -24,12 +26,30 @@ function sendEvent(
 
 interface TeamBRequestBody extends TeamBInput {
   historyContext?: unknown[];
+  visualStyle?: {
+    uniformDescription?: string;
+    colorPalette?: string;
+    sceneDescription?: string;
+  };
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const input = body as TeamBRequestBody;
   const historyContext = input.historyContext;
+
+  // historyContext から Team A の visualStyle を取得
+  let visualStyle = input.visualStyle;
+  if (!visualStyle && historyContext && historyContext.length > 0) {
+    for (const ctx of historyContext) {
+      const ctxObj = ctx as Record<string, unknown>;
+      const outputData = ctxObj.outputData as Record<string, unknown> | undefined;
+      if (outputData?.visualStyle) {
+        visualStyle = outputData.visualStyle as unknown as typeof visualStyle;
+        break;
+      }
+    }
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -44,9 +64,33 @@ export async function POST(request: NextRequest) {
       };
 
       try {
+        // DB から参考原稿を取得
+        let userReferences: ReferencePostingData[] = [];
+        try {
+          const refs = await prisma.referencePosting.findMany({
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          });
+          userReferences = refs.map((r) => ({
+            id: r.id,
+            title: r.title,
+            platform: r.platform,
+            industry: r.industry,
+            jobType: r.jobType,
+            postingData: JSON.parse(r.postingData) as Record<string, string>,
+            performance: r.performance || undefined,
+          }));
+          if (userReferences.length > 0) {
+            console.log(`[team-b] ${userReferences.length}件の参考原稿をロードしました`);
+          }
+        } catch (e) {
+          console.warn("[team-b] 参考原稿の取得に失敗:", e);
+        }
+
         const isIndeed = input.platform === "indeed";
         const isJobMedley = input.platform === "jobmedley";
-        const hasMetrics = !isJobMedley && !!input.metrics;
+        const isHelloWork = input.platform === "hellowork";
+        const hasMetrics = !isJobMedley && !isHelloWork && !!input.metrics;
 
         // Step 1: Manager Agent
         startAgent("tb-manager", "既存原稿の確認・媒体特定を開始します");
@@ -75,7 +119,7 @@ export async function POST(request: NextRequest) {
             issueCount: metricsAnalysisResult.issues.length,
           });
         } else {
-          completeAgent("tb-metrics-analysis", isJobMedley ? "JobMedleyは数値分析スキップ" : "数値データなし・スキップ");
+          completeAgent("tb-metrics-analysis", isJobMedley ? "JobMedleyは数値分析スキップ" : isHelloWork ? "ハローワークは数値分析スキップ" : "数値データなし・スキップ");
         }
 
         // Step 3: 原稿分析
@@ -114,12 +158,14 @@ export async function POST(request: NextRequest) {
             existingPosting: input.existingPosting,
             manuscriptAnalysis,
             metricsIssues: metricsAnalysisResult?.issues,
+            userReferences: userReferences.length > 0 ? userReferences : undefined,
           }),
           runDesignImprovementAgent({
             platform: input.platform,
             existingPosting: input.existingPosting,
             improvedPosting: input.existingPosting,
             historyContext: historyContext,
+            visualStyle,
           }),
           isIndeed && metricsAnalysisResult && input.metrics
             ? runBudgetOptimizationAgent({
@@ -133,6 +179,7 @@ export async function POST(request: NextRequest) {
         const [textResult, designResult, budgetResult] = await Promise.all(parallelTasks);
 
         completeAgent("tb-text-improvement", `リライト完了（${textResult.improvements.length}箇所改善）`);
+        const platformThumbnails = designResult.platformThumbnails;
         completeAgent("tb-design-improvement", designResult.message, {
           thumbnailCount: designResult.thumbnailUrls.length,
           status: designResult.generationStatus,
@@ -154,6 +201,7 @@ export async function POST(request: NextRequest) {
           improvements: textResult.improvements,
           improvedPosting: textResult.improvedPosting,
           thumbnailUrls: designResult.thumbnailUrls,
+          platformThumbnails,
           budgetRecommendation: budgetResult?.recommendation,
           generatedAt: now(),
         };

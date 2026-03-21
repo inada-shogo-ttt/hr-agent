@@ -29,3 +29,14 @@ model JobRecord {
   thumbnailUrls String?  // JSON: string[]
   createdAt     DateTime @default(now())
 }
+
+model ReferencePosting {
+  id          String   @id @default(cuid())
+  title       String               // 管理用タイトル（例:「介護職_応募殺到ver」）
+  platform    String               // indeed / airwork / jobmedley
+  industry    String               // 業種
+  jobType     String               // 職種
+  postingData String               // 原稿フィールド JSON
+  performance String?              // 実績メモ（例:「月50件応募」）
+  createdAt   DateTime @default(now())
+}

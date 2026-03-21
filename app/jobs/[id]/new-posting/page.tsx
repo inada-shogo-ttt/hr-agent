@@ -22,7 +22,7 @@ export default function JobNewPostingPage() {
 
         <h1 className="text-2xl font-bold mb-2">新規求人原稿を作成</h1>
         <p className="text-muted-foreground mb-8">
-          求人情報を入力してください。AIエージェントが自動で3媒体分の原稿を生成します。
+          求人情報を入力してください。AIエージェントが自動で4媒体分の原稿を生成します。
         </p>
 
         <JobInputForm jobId={jobId} />

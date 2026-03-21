@@ -49,3 +49,8 @@ export type Job = Prisma.JobModel
  * 
  */
 export type JobRecord = Prisma.JobRecordModel
+/**
+ * Model ReferencePosting
+ * 
+ */
+export type ReferencePosting = Prisma.ReferencePostingModel

@@ -63,6 +63,12 @@ export async function runTrendResearchAgent(
         }
       }
 
+      if (!resultText.trim()) {
+        console.warn(`[trend-research] No text in response for query "${query}", using fallback`);
+        results.push(await getFallbackTrendData(query, industry, jobCategory, prefecture));
+        continue;
+      }
+
       try {
         const result = extractJSON<TrendResearchResult>(resultText, "trend-research/search");
         results.push(result);

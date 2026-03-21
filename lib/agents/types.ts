@@ -2,6 +2,8 @@
 
 import { JobPostingInput } from "@/types/job-posting";
 import { AllPlatformPostings } from "@/types/platform";
+import { PlatformThumbnails } from "@/lib/nanobanana";
+import { ReferencePostingData } from "@/types/reference";
 
 // エージェントの状態
 export type AgentStatus = "pending" | "running" | "completed" | "error";
@@ -96,6 +98,7 @@ export interface TrendAnalysisOutput {
 export interface ReferenceSelectionInput {
   trendAnalysis: TrendAnalysisOutput;
   jobPostingInput: JobPostingInput;
+  userReferences?: ReferencePostingData[];
 }
 
 export interface ReferenceExample {
@@ -119,6 +122,7 @@ export interface ManuscriptWritingInput {
   managerOutput: ManagerOutput;
   trendAnalysis: TrendAnalysisOutput;
   referenceSelection: ReferenceSelectionOutput;
+  userReferences?: ReferencePostingData[];
 }
 
 export interface ManuscriptWritingOutput {
@@ -153,6 +157,31 @@ export interface ManuscriptWritingOutput {
     access: string;
     selectionProcess: string;
   };
+  hellowork: {
+    jobTitle: string;
+    jobDescription: string;
+    employmentPeriod: string;
+    contractRenewal: string;
+    wageAmount: string;
+    allowances: string;
+    commutingAllowance: string;
+    bonus: string;
+    raise: string;
+    workingHours: string;
+    overtime: string;
+    breakTime: string;
+    holidays: string;
+    annualLeave: string;
+    insurance: string;
+    pension: string;
+    trialPeriod: string;
+    specialNotes: string;
+    requirements: string;
+    requiredLicenses: string;
+    selectionMethod: string;
+    applicationDocuments: string;
+    remarks: string;
+  };
 }
 
 // Thumbnail Generation Agent
@@ -161,10 +190,18 @@ export interface ThumbnailGenerationInput {
   manuscript: ManuscriptWritingOutput;
 }
 
+export interface VisualStyle {
+  uniformDescription?: string;
+  colorPalette?: string;
+  sceneDescription?: string;
+}
+
 export interface ThumbnailGenerationOutput {
-  thumbnailUrls: string[];
+  platformThumbnails: PlatformThumbnails;
+  thumbnailUrls: string[]; // deprecated, 後方互換用
   generationStatus: "success" | "placeholder" | "error";
   message: string;
+  visualStyle?: VisualStyle;
 }
 
 // Fact Check Agent

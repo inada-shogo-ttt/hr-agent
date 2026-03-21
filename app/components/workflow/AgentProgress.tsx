@@ -10,14 +10,14 @@ interface AgentProgressProps {
 }
 
 const AGENT_LABELS: Record<AgentId, string> = {
-  manager: "Manager Agent",
-  "trend-research": "Trend Research Agent",
-  "trend-analysis": "Trend Analysis Agent",
-  "reference-selection": "Reference Selection Agent",
-  "manuscript-writing": "Manuscript Writing Agent",
-  "thumbnail-generation": "Thumbnail Generation Agent",
-  "fact-check": "Fact Check Agent",
-  "platform-formatter": "Platform Formatter",
+  manager: "マネージャーエージェント",
+  "trend-research": "トレンド調査エージェント",
+  "trend-analysis": "トレンド分析エージェント",
+  "reference-selection": "参考原稿選定エージェント",
+  "manuscript-writing": "原稿執筆エージェント",
+  "thumbnail-generation": "サムネイル生成エージェント",
+  "fact-check": "ファクトチェックエージェント",
+  "platform-formatter": "媒体フォーマッター",
 };
 
 const AGENT_DESCRIPTIONS: Record<AgentId, string> = {
@@ -25,7 +25,7 @@ const AGENT_DESCRIPTIONS: Record<AgentId, string> = {
   "trend-research": "Web検索で最新の求人トレンド調査",
   "trend-analysis": "トレンドデータの分析・洞察抽出",
   "reference-selection": "効果的な参考原稿の選定",
-  "manuscript-writing": "3媒体分の求人原稿を執筆",
+  "manuscript-writing": "4媒体分の求人原稿を執筆",
   "thumbnail-generation": "サムネイル画像の自動生成",
   "fact-check": "原稿と募集要項の整合性チェック",
   "platform-formatter": "各媒体フォーマットへの整形",

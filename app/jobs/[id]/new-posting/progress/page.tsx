@@ -8,9 +8,11 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { AgentProgress } from "@/app/components/workflow/AgentProgress";
 import { WorkflowTimeline } from "@/app/components/workflow/WorkflowTimeline";
+import { OfficeScene, OfficeAgent } from "@/app/components/workflow/OfficeScene";
 import { SSEEvent, AgentId, AgentStatus } from "@/lib/agents/types";
 import { AllPlatformPostings } from "@/types/platform";
 import { ChevronLeft, AlertCircle } from "lucide-react";
+import { saveThumbnails } from "@/lib/thumbnail-store";
 
 const AGENT_WEIGHTS: Record<AgentId, number> = {
   manager: 5,
@@ -22,6 +24,17 @@ const AGENT_WEIGHTS: Record<AgentId, number> = {
   "fact-check": 10,
   "platform-formatter": 5,
 };
+
+const TEAM_A_AGENTS: OfficeAgent[] = [
+  { id: "manager", label: "マネージャー", color: "#3B82F6" },
+  { id: "trend-research", label: "トレンド調査", color: "#10B981" },
+  { id: "trend-analysis", label: "トレンド分析", color: "#14B8A6" },
+  { id: "reference-selection", label: "参考原稿選定", color: "#8B5CF6" },
+  { id: "manuscript-writing", label: "原稿執筆", color: "#6366F1" },
+  { id: "thumbnail-generation", label: "サムネイル生成", color: "#EC4899" },
+  { id: "fact-check", label: "ファクトチェック", color: "#F59E0B" },
+  { id: "platform-formatter", label: "フォーマッター", color: "#64748B" },
+];
 
 export default function JobProgressPage() {
   const router = useRouter();
@@ -132,32 +145,32 @@ export default function JobProgressPage() {
 
       if (event.data) {
         const output = event.data as AllPlatformPostings;
-        const thumbnailUrls = output.thumbnailUrls ?? [];
 
         const outputWithoutThumbnails: AllPlatformPostings = {
           ...output,
           thumbnailUrls: [],
+          platformThumbnails: undefined,
           indeed: { ...output.indeed, thumbnailUrls: [] },
           airwork: { ...output.airwork, thumbnailUrls: [] },
+          jobmedley: { ...output.jobmedley, thumbnailUrls: [] },
         };
 
         sessionStorage.setItem("finalOutput", JSON.stringify(outputWithoutThumbnails));
 
-        if (thumbnailUrls.length > 0) {
-          try {
-            sessionStorage.setItem("thumbnailUrls", JSON.stringify(thumbnailUrls));
-          } catch {
-            console.warn("[progress] サムネイル保存失敗");
-            sessionStorage.setItem(
-              "thumbnailUrls",
-              JSON.stringify([
-                "https://placehold.co/1344x768/1e40af/ffffff?text=サムネイル+1",
-                "https://placehold.co/1344x768/1d4ed8/ffffff?text=サムネイル+2",
-                "https://placehold.co/1344x768/2563eb/ffffff?text=サムネイル+3",
-              ])
-            );
-          }
+        // 媒体別にIndexedDBに保存
+        const saves: Promise<void>[] = [];
+        if (output.indeed?.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails("teamA-indeed", output.indeed.thumbnailUrls));
         }
+        if (output.airwork?.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails("teamA-airwork", output.airwork.thumbnailUrls));
+        }
+        if (output.jobmedley?.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails("teamA-jobmedley", output.jobmedley.thumbnailUrls));
+        }
+        Promise.all(saves).catch(() => {
+          console.warn("[progress] サムネイル保存失敗");
+        });
 
         // DB に履歴保存
         const inputData = sessionStorage.getItem("jobPostingInput");
@@ -169,9 +182,18 @@ export default function JobProgressPage() {
             platform: "all",
             inputData: inputData ? JSON.parse(inputData) : null,
             outputData: outputWithoutThumbnails,
-            thumbnailUrls,
+            thumbnailUrls: [
+              ...(output.indeed?.thumbnailUrls ?? []),
+              ...(output.airwork?.thumbnailUrls ?? []),
+              ...(output.jobmedley?.thumbnailUrls ?? []),
+            ],
           }),
-        }).catch((err) => console.error("Failed to save record:", err));
+        })
+          .then((r) => r.json())
+          .then((record) => {
+            sessionStorage.setItem("teamARecordId", record.id);
+          })
+          .catch((err) => console.error("Failed to save record:", err));
       }
 
       setTimeout(() => {
@@ -197,6 +219,11 @@ export default function JobProgressPage() {
         <p className="text-muted-foreground mb-8">
           求人原稿を自動生成しています。このページを閉じないでください。
         </p>
+
+        {/* オフィスシーン */}
+        <div className="mb-6">
+          <OfficeScene agents={TEAM_A_AGENTS} statuses={agentStatuses} progress={progress} />
+        </div>
 
         <Card className="mb-6">
           <CardContent className="pt-6">

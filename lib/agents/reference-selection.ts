@@ -5,12 +5,31 @@ import { extractJSON } from "./utils";
 export async function runReferenceSelectionAgent(
   input: ReferenceSelectionInput
 ): Promise<ReferenceSelectionOutput> {
-  const { trendAnalysis, jobPostingInput } = input;
+  const { trendAnalysis, jobPostingInput, userReferences } = input;
   const { common } = jobPostingInput;
+
+  // ユーザー登録の成功原稿セクションを構築
+  let userReferencesSection = "";
+  if (userReferences && userReferences.length > 0) {
+    const refsText = userReferences.map((ref) => {
+      const fields = Object.entries(ref.postingData)
+        .map(([k, v]) => `  ${k}: ${v}`)
+        .join("\n");
+      return `【${ref.title}】（${ref.platform} / 実績: ${ref.performance || "不明"}）\n${fields}`;
+    }).join("\n\n");
+
+    userReferencesSection = `
+## ユーザー登録の成功原稿（実績あり）
+以下はユーザーが登録した応募実績のある求人原稿です。
+構成・表現・訴求ポイントの出し方を積極的に参考にしてください。
+
+${refsText}
+`;
+  }
 
   const prompt = `あなたは求人原稿の専門ライターです。
 以下の分析結果をもとに、原稿作成の参考になる優良事例を選定し、執筆ガイドラインを作成してください。
-
+${userReferencesSection}
 ## 求人基本情報
 業種: ${common.industry}
 職種: ${common.jobTitle}

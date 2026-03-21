@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExistingIndeedFields } from "./ExistingIndeedFields";
 import { ExistingAirWorkFields } from "./ExistingAirWorkFields";
 import { ExistingJobMedleyFields } from "./ExistingJobMedleyFields";
+import { ExistingHelloWorkFields } from "./ExistingHelloWorkFields";
 import { TeamBInput, ExistingPostingFields, IndeedMetrics, AirWorkMetrics } from "@/types/team-b";
 import { Platform } from "@/types/platform";
 
@@ -53,10 +54,11 @@ export function RewriteInputForm() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="indeed" onValueChange={handleTabChange}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="indeed">Indeed</TabsTrigger>
               <TabsTrigger value="airwork">AirWork</TabsTrigger>
               <TabsTrigger value="jobmedley">JobMedley</TabsTrigger>
+              <TabsTrigger value="hellowork">ハローワーク</TabsTrigger>
             </TabsList>
 
             <TabsContent value="indeed" className="mt-6">
@@ -79,6 +81,13 @@ export function RewriteInputForm() {
 
             <TabsContent value="jobmedley" className="mt-6">
               <ExistingJobMedleyFields
+                data={posting}
+                onChange={updatePosting}
+              />
+            </TabsContent>
+
+            <TabsContent value="hellowork" className="mt-6">
+              <ExistingHelloWorkFields
                 data={posting}
                 onChange={updatePosting}
               />

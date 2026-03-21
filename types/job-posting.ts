@@ -124,10 +124,25 @@ export interface JobMedleySpecificInfo {
   longTermHolidays?: string;
 }
 
+// HelloWork固有の追加情報
+export interface HelloWorkSpecificInfo {
+  employmentPeriod?: string;
+  contractRenewal?: string;
+  overtime?: string;
+  annualLeave?: string;
+  pension?: string;
+  requiredLicenses?: string;
+  ageRestriction?: string;
+  selectionMethod?: string;
+  applicationDocuments?: string;
+  remarks?: string;
+}
+
 // 完全な入力フォームの型
 export interface JobPostingInput {
   common: CommonJobInfo;
   indeed?: IndeedSpecificInfo;
   airwork?: AirWorkSpecificInfo;
   jobmedley?: JobMedleySpecificInfo;
+  hellowork?: HelloWorkSpecificInfo;
 }

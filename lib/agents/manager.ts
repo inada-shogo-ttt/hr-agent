@@ -10,18 +10,51 @@ export async function runManagerAgent(input: ManagerInput): Promise<ManagerOutpu
 以下の求人情報を分析し、原稿作成の要件を整理してください。
 
 ## 入力された求人情報
+
+### 会社情報
 会社名: ${common.companyName}
 業種: ${common.industry}
+会社説明: ${common.companyDescription || "未記入"}
+
+### 職種情報
 職種: ${common.jobTitle}
 雇用形態: ${common.employmentType}
+募集人数: ${common.numberOfHires ?? "未記入"}
+
+### 勤務地
 都道府県: ${common.prefecture}
 市区町村: ${common.city}
-給与: ${common.salaryType} ${common.salaryMin}円${common.salaryMax ? `〜${common.salaryMax}円` : ""}
+住所: ${common.address || "未記入"}
+最寄り駅: ${common.nearestStation || "未記入"}
+駅からのアクセス: ${common.accessFromStation || "未記入"}
+
+### 給与
+給与形態: ${common.salaryType}
+給与下限: ${common.salaryMin}円
+給与上限: ${common.salaryMax ? `${common.salaryMax}円` : "未記入"}
+給与補足: ${common.salaryDescription || "未記入"}
+
+### 勤務時間
 勤務時間: ${common.workingHours}
-仕事内容: ${common.jobDescription}
-求める人材: ${common.requirements}
+勤務時間補足: ${common.workingHoursDescription || "未記入"}
+
+### 仕事内容
+${common.jobDescription}
+
+### 応募要件
+必須条件: ${common.requirements}
+歓迎条件: ${common.welcomeRequirements || "未記入"}
+
+### 待遇・休日
 休暇・休日: ${common.holidays}
 待遇・福利厚生: ${common.benefits}
+社会保険: ${common.socialInsurance?.length > 0 ? common.socialInsurance.join("、") : "未記入"}
+試用期間: ${common.probationPeriod || "未記入"}
+
+### 選考情報
+選考の流れ: ${common.selectionProcess || "未記入"}
+
+### 採用担当者メモ
 アピールポイント: ${common.appealPoints || "未記入"}
 ターゲット層: ${common.targetAudience || "未記入"}
 競合優位性: ${common.competitiveAdvantage || "未記入"}

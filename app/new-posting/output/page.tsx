@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, Plus, Clock } from "lucide-react";
+import { loadThumbnails } from "@/lib/thumbnail-store";
 
 export default function OutputPage() {
   const router = useRouter();
@@ -24,20 +25,20 @@ export default function OutputPage() {
     try {
       const parsed = JSON.parse(stored) as AllPlatformPostings;
 
-      // サムネイルは別キーに保存されているため、3箇所すべてに復元する
-      const storedThumbnails = sessionStorage.getItem("thumbnailUrls");
-      if (storedThumbnails) {
-        try {
-          const urls = JSON.parse(storedThumbnails) as string[];
-          parsed.thumbnailUrls = urls;
-          if (parsed.indeed) parsed.indeed.thumbnailUrls = urls;
-          if (parsed.airwork) parsed.airwork.thumbnailUrls = urls;
-        } catch {
-          // パース失敗時は空配列のまま
-        }
-      }
-
-      setOutput(parsed);
+      // IndexedDB から媒体別サムネイルを読み込み
+      Promise.all([
+        loadThumbnails("teamA-indeed"),
+        loadThumbnails("teamA-airwork"),
+        loadThumbnails("teamA-jobmedley"),
+      ]).then(([indeedUrls, airworkUrls, jobmedleyUrls]) => {
+        if (parsed.indeed) parsed.indeed.thumbnailUrls = indeedUrls;
+        if (parsed.airwork) parsed.airwork.thumbnailUrls = airworkUrls;
+        if (parsed.jobmedley) parsed.jobmedley.thumbnailUrls = jobmedleyUrls;
+        parsed.thumbnailUrls = [...indeedUrls, ...airworkUrls, ...jobmedleyUrls];
+        setOutput({ ...parsed });
+      }).catch(() => {
+        setOutput(parsed);
+      });
     } catch {
       router.replace("/new-posting");
     }
@@ -71,7 +72,7 @@ export default function OutputPage() {
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold">求人原稿 完成</h1>
               <Badge className="bg-green-100 text-green-700 border-green-200">
-                3媒体対応
+                4媒体対応
               </Badge>
             </div>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -92,11 +93,8 @@ export default function OutputPage() {
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-blue-700 font-medium">
-                サムネイル画像: {output.thumbnailUrls?.length ?? 0}枚生成済み
+                サムネイル画像: Indeed {output.indeed?.thumbnailUrls?.length ?? 0}枚 / AirWork {output.airwork?.thumbnailUrls?.length ?? 0}枚 / JobMedley {output.jobmedley?.thumbnailUrls?.length ?? 0}枚
               </span>
-              <div className="flex gap-3 text-muted-foreground">
-                <span>Indeed / AirWork / JobMedley に対応</span>
-              </div>
             </div>
           </CardContent>
         </Card>

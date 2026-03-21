@@ -1,6 +1,7 @@
 // Team B: 再掲載用原稿改善 — 型定義
 
 import { Platform } from "@/types/platform";
+import { PlatformThumbnails } from "@/lib/nanobanana";
 
 // 媒体別の数値指標
 export interface IndeedMetrics {
@@ -88,6 +89,30 @@ export interface ExistingPostingFields {
   welcomeRequirements?: string;
   employmentTypeAndSalary?: string;
 
+  // ハローワーク固有
+  companyAddress?: string;
+  workLocation?: string;
+  smokingPolicy?: string;
+  employmentPeriod?: string;
+  contractRenewal?: string;
+  wageType?: string;
+  wageAmount?: string;
+  allowances?: string;
+  commutingAllowance?: string;
+  bonus?: string;
+  raise?: string;
+  overtime?: string;
+  annualLeave?: string;
+  insurance?: string;
+  pension?: string;
+  trialPeriod?: string;
+  specialNotes?: string;
+  requiredLicenses?: string;
+  selectionMethod?: string;
+  applicationDocuments?: string;
+  selectionNotification?: string;
+  remarks?: string;
+
   // サムネイル要望
   thumbnailRequirements?: string;
 }
@@ -135,6 +160,7 @@ export interface TeamBOutput {
   improvements: ImprovementDiff[];
   improvedPosting: ExistingPostingFields;
   thumbnailUrls: string[];
+  platformThumbnails?: PlatformThumbnails;
   budgetRecommendation?: BudgetRecommendation;
   generatedAt: string;
 }

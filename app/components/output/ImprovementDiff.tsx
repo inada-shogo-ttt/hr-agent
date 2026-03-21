@@ -34,7 +34,7 @@ export function ImprovementDiff({ improvements }: ImprovementDiffProps) {
             <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
               {/* Before */}
               <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-                <p className="text-xs font-medium text-red-600 mb-1">Before</p>
+                <p className="text-xs font-medium text-red-600 mb-1">変更前</p>
                 <p className="text-sm whitespace-pre-wrap">{diff.before}</p>
               </div>
 
@@ -44,7 +44,7 @@ export function ImprovementDiff({ improvements }: ImprovementDiffProps) {
 
               {/* After */}
               <div className="p-3 rounded-lg bg-green-50 border border-green-200">
-                <p className="text-xs font-medium text-green-600 mb-1">After</p>
+                <p className="text-xs font-medium text-green-600 mb-1">変更後</p>
                 <p className="text-sm whitespace-pre-wrap">{diff.after}</p>
               </div>
             </div>

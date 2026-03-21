@@ -1,10 +1,22 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExistingPostingFields, AirWorkMetrics } from "@/types/team-b";
+import {
+  Users,
+  MousePointerClick,
+  Eye,
+  ChevronDown,
+  ChevronUp,
+  Calculator,
+  Sparkles,
+  PartyPopper,
+  Frown,
+} from "lucide-react";
 
 interface ExistingAirWorkFieldsProps {
   data: ExistingPostingFields;
@@ -13,43 +25,195 @@ interface ExistingAirWorkFieldsProps {
   onMetricsChange: (data: Partial<AirWorkMetrics>) => void;
 }
 
+function getApplicationEmoji(count: number | undefined) {
+  if (count === undefined) return null;
+  if (count === 0) return { icon: Frown, color: "text-red-500", bg: "bg-red-50", border: "border-red-200", message: "まだ応募がありません...改善しましょう！", ring: "ring-red-200" };
+  if (count <= 2) return { icon: Sparkles, color: "text-orange-500", bg: "bg-orange-50", border: "border-orange-200", message: "応募が来ています！もっと増やしましょう", ring: "ring-orange-200" };
+  if (count <= 5) return { icon: Sparkles, color: "text-blue-500", bg: "bg-blue-50", border: "border-blue-200", message: "いい感じです！さらに伸ばせるかも", ring: "ring-blue-200" };
+  return { icon: PartyPopper, color: "text-green-500", bg: "bg-green-50", border: "border-green-200", message: "素晴らしい！この調子でいきましょう", ring: "ring-green-200" };
+}
+
 export function ExistingAirWorkFields({ data, metrics, onChange, onMetricsChange }: ExistingAirWorkFieldsProps) {
+  const [showCalculated, setShowCalculated] = useState(false);
+  const [manualOverrides, setManualOverrides] = useState<Record<string, boolean>>({});
+
+  // 自動計算
+  const calcCtr = metrics.impressions && metrics.clicks
+    ? Math.round((metrics.clicks / metrics.impressions) * 10000) / 100
+    : undefined;
+  const calcAppCompleteRate = metrics.clicks && metrics.applications
+    ? Math.round((metrics.applications / metrics.clicks) * 10000) / 100
+    : undefined;
+  const calcCpc = metrics.cpc; // AirWorkにはtotalBudgetUsedがないのでそのまま
+
+  // 自動計算値を反映
+  const onMetricsChangeRef = useRef(onMetricsChange);
+  onMetricsChangeRef.current = onMetricsChange;
+
+  useEffect(() => {
+    const updates: Partial<AirWorkMetrics> = {};
+    if (!manualOverrides.ctr && calcCtr !== undefined) updates.ctr = calcCtr;
+    if (!manualOverrides.applicationCompleteRate && calcAppCompleteRate !== undefined) updates.applicationCompleteRate = calcAppCompleteRate;
+    if (Object.keys(updates).length > 0) onMetricsChangeRef.current(updates);
+  }, [calcCtr, calcAppCompleteRate, manualOverrides]);
+
+  const handleManualOverride = (field: string, value: string) => {
+    setManualOverrides((prev) => ({ ...prev, [field]: value !== "" }));
+    onMetricsChange({ [field]: value === "" ? undefined : parseFloat(value) });
+  };
+
+  const displayCtr = manualOverrides.ctr ? metrics.ctr : (calcCtr ?? metrics.ctr);
+  const displayAppCompleteRate = manualOverrides.applicationCompleteRate ? metrics.applicationCompleteRate : (calcAppCompleteRate ?? metrics.applicationCompleteRate);
+  const displayCpc = metrics.cpc;
+
+  const appStatus = getApplicationEmoji(metrics.applications);
+
   return (
     <div className="space-y-8">
-      {/* 数値指標 */}
-      <Card className="border-orange-200 bg-orange-50/50">
-        <CardHeader>
-          <CardTitle className="text-base">掲載数値（AirWork）</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>表示回数</Label>
-              <Input type="number" value={metrics.impressions ?? ""} onChange={(e) => onMetricsChange({ impressions: parseFloat(e.target.value) || undefined })} placeholder="例: 3000" />
+      {/* 掲載数値セクション */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-1 bg-orange-500 rounded-full" />
+          <h3 className="text-lg font-bold text-gray-800">掲載データを入力</h3>
+          <span className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">AirWork</span>
+        </div>
+        <p className="text-sm text-muted-foreground -mt-2 ml-5">
+          AirWorkの管理画面の数値を入力してください。わかる範囲でOKです！
+        </p>
+
+        {/* ===== ヒーローカード: 応募数 ===== */}
+        <Card className={`relative overflow-hidden transition-all duration-300 ${appStatus ? appStatus.border : "border-orange-300"} ${appStatus ? appStatus.bg : "bg-gradient-to-br from-orange-50 to-amber-50"}`}>
+          <CardContent className="pt-6 pb-5">
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-2xl ${appStatus ? appStatus.bg : "bg-orange-100"} transition-colors`}>
+                <Users className={`w-8 h-8 ${appStatus ? appStatus.color : "text-orange-500"} transition-colors`} />
+              </div>
+              <div className="flex-1">
+                <Label className="text-base font-bold text-gray-800 flex items-center gap-2">
+                  応募数
+                  <span className="text-xs font-normal text-muted-foreground">（一番大事！）</span>
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  何件応募が来ましたか？
+                </p>
+              </div>
+              <div className="w-36">
+                <Input
+                  type="number"
+                  value={metrics.applications ?? ""}
+                  onChange={(e) => onMetricsChange({ applications: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                  placeholder="0"
+                  className={`text-2xl font-bold text-center h-14 border-2 transition-all ${appStatus ? `${appStatus.ring} focus:ring-2` : "focus:ring-2 focus:ring-orange-300"}`}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>クリック数</Label>
-              <Input type="number" value={metrics.clicks ?? ""} onChange={(e) => onMetricsChange({ clicks: parseFloat(e.target.value) || undefined })} placeholder="例: 80" />
+            {appStatus && (
+              <div className={`mt-3 flex items-center gap-2 text-sm ${appStatus.color} font-medium animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                <appStatus.icon className="w-4 h-4" />
+                {appStatus.message}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ===== 中段: クリック数・表示回数 ===== */}
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="border-gray-200 hover:border-orange-200 transition-colors">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <MousePointerClick className="w-4 h-4 text-orange-400" />
+                <Label className="text-sm font-semibold text-gray-700">クリック数</Label>
+              </div>
+              <Input
+                type="number"
+                value={metrics.clicks ?? ""}
+                onChange={(e) => onMetricsChange({ clicks: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                placeholder="例: 80"
+                className="text-lg font-semibold h-11"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">求人がクリックされた回数</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-gray-200 hover:border-orange-200 transition-colors">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Eye className="w-4 h-4 text-amber-400" />
+                <Label className="text-sm font-semibold text-gray-700">表示回数</Label>
+              </div>
+              <Input
+                type="number"
+                value={metrics.impressions ?? ""}
+                onChange={(e) => onMetricsChange({ impressions: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                placeholder="例: 3000"
+                className="text-lg font-semibold h-11"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">検索結果に表示された回数</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ===== 自動算出エリア ===== */}
+        <button
+          type="button"
+          onClick={() => setShowCalculated(!showCalculated)}
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-violet-50 to-orange-50 hover:from-violet-100 hover:to-orange-100 rounded-lg border border-violet-200 transition-colors text-sm text-violet-700"
+        >
+          <div className="flex items-center gap-2">
+            <Calculator className="w-3.5 h-3.5" />
+            <span>自動算出データ</span>
+            {(displayCtr !== undefined || displayCpc !== undefined) && (
+              <span className="text-xs bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded">自動計算済</span>
+            )}
+          </div>
+          {showCalculated ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
+        {showCalculated && (
+          <div className="grid grid-cols-3 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-gray-500 flex items-center gap-1">
+                クリック率（%）
+                {!manualOverrides.ctr && calcCtr !== undefined && <span className="text-violet-500 text-[10px]">自動</span>}
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={displayCtr ?? ""}
+                onChange={(e) => handleManualOverride("ctr", e.target.value)}
+                placeholder={calcCtr !== undefined ? `${calcCtr}` : "自動計算"}
+                className={`text-sm h-9 ${!manualOverrides.ctr && calcCtr !== undefined ? "bg-violet-50/50 border-violet-200" : ""}`}
+              />
             </div>
-            <div className="space-y-2">
-              <Label>応募数</Label>
-              <Input type="number" value={metrics.applications ?? ""} onChange={(e) => onMetricsChange({ applications: parseFloat(e.target.value) || undefined })} placeholder="例: 5" />
+            <div className="space-y-1.5">
+              <Label className="text-xs text-gray-500 flex items-center gap-1">
+                クリック単価（円）
+              </Label>
+              <Input
+                type="number"
+                value={displayCpc ?? ""}
+                onChange={(e) => handleManualOverride("cpc", e.target.value)}
+                placeholder="手動入力"
+                className="text-sm h-9"
+              />
             </div>
-            <div className="space-y-2">
-              <Label>クリック率（%）</Label>
-              <Input type="number" step="0.01" value={metrics.ctr ?? ""} onChange={(e) => onMetricsChange({ ctr: parseFloat(e.target.value) || undefined })} placeholder="例: 2.7" />
-            </div>
-            <div className="space-y-2">
-              <Label>クリック単価（円）</Label>
-              <Input type="number" value={metrics.cpc ?? ""} onChange={(e) => onMetricsChange({ cpc: parseFloat(e.target.value) || undefined })} placeholder="例: 300" />
-            </div>
-            <div className="space-y-2">
-              <Label>応募完了率（%）</Label>
-              <Input type="number" step="0.01" value={metrics.applicationCompleteRate ?? ""} onChange={(e) => onMetricsChange({ applicationCompleteRate: parseFloat(e.target.value) || undefined })} placeholder="例: 6.3" />
+            <div className="space-y-1.5">
+              <Label className="text-xs text-gray-500 flex items-center gap-1">
+                応募完了率（%）
+                {!manualOverrides.applicationCompleteRate && calcAppCompleteRate !== undefined && <span className="text-violet-500 text-[10px]">自動</span>}
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={displayAppCompleteRate ?? ""}
+                onChange={(e) => handleManualOverride("applicationCompleteRate", e.target.value)}
+                placeholder={calcAppCompleteRate !== undefined ? `${calcAppCompleteRate}` : "自動計算"}
+                className={`text-sm h-9 ${!manualOverrides.applicationCompleteRate && calcAppCompleteRate !== undefined ? "bg-violet-50/50 border-violet-200" : ""}`}
+              />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* 既存原稿 */}
       <Card>

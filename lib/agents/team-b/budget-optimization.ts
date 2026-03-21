@@ -6,6 +6,7 @@ export async function runBudgetOptimizationAgent(input: BudgetOptimizationInput)
   const { metrics, existingPosting, metricsAnalysis } = input;
 
   const prompt = `あなたはIndeed求人広告の予算最適化の専門家です。
+  応募数最大化を目的とし予算を選定してください。
 以下の数値データと分析結果に基づいて、最適な日額予算を推奨してください。
 
 ## 現在の数値
@@ -25,7 +26,7 @@ export async function runBudgetOptimizationAgent(input: BudgetOptimizationInput)
 ${metricsAnalysis.summary}
 
 ## 予算最適化の考え方
-- 日額予算500〜2,000円/日が一般的なレンジ
+- 日額予算1000〜2,000円/日が一般的なレンジ
 - CTRが低い場合: まず原稿改善を優先し、予算は維持or微増
 - CTRが高く応募率も高い場合: 予算増加で表示回数を増やす
 - CPCが高すぎる場合: 予算配分の見直しを推奨

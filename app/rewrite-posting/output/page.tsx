@@ -3,22 +3,25 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { TeamBOutput } from "@/types/team-b";
+import { TeamBOutput, ExistingPostingFields } from "@/types/team-b";
 import { ImprovementOutput } from "@/app/components/output/ImprovementOutput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, RefreshCw, Clock } from "lucide-react";
+import { loadThumbnails } from "@/lib/thumbnail-store";
 
 const PLATFORM_LABELS: Record<string, string> = {
   indeed: "Indeed",
   airwork: "AirWork",
   jobmedley: "JobMedley",
+  hellowork: "ハローワーク",
 };
 
 export default function TeamBOutputPage() {
   const router = useRouter();
   const [output, setOutput] = useState<TeamBOutput | null>(null);
+  const [originalPosting, setOriginalPosting] = useState<ExistingPostingFields>({});
 
   useEffect(() => {
     const stored = sessionStorage.getItem("teamBOutput");
@@ -30,16 +33,23 @@ export default function TeamBOutputPage() {
     try {
       const parsed = JSON.parse(stored) as TeamBOutput;
 
-      const storedThumbnails = sessionStorage.getItem("teamBThumbnailUrls");
-      if (storedThumbnails) {
+      const inputStr = sessionStorage.getItem("teamBInput");
+      if (inputStr) {
         try {
-          parsed.thumbnailUrls = JSON.parse(storedThumbnails) as string[];
-        } catch {
-          // パース失敗時は空配列のまま
-        }
+          const inputData = JSON.parse(inputStr);
+          setOriginalPosting(inputData.existingPosting || {});
+        } catch { /* ignore */ }
       }
 
-      setOutput(parsed);
+      // IndexedDB から媒体別サムネイルを読み込み
+      loadThumbnails(`teamB-${parsed.platform}`).then((urls) => {
+        if (urls.length > 0) {
+          parsed.thumbnailUrls = urls;
+        }
+        setOutput({ ...parsed });
+      }).catch(() => {
+        setOutput(parsed);
+      });
     } catch {
       router.replace("/rewrite-posting");
     }
@@ -105,7 +115,7 @@ export default function TeamBOutputPage() {
           </CardContent>
         </Card>
 
-        <ImprovementOutput output={output} />
+        <ImprovementOutput output={output} originalPosting={originalPosting} />
       </div>
     </main>
   );

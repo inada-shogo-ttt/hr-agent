@@ -11,6 +11,7 @@ import { ChevronLeft, AlertCircle, CheckCircle, Circle, Loader2, XCircle } from 
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { TeamBOutput } from "@/types/team-b";
 import { AgentStatus } from "@/lib/agents/types";
+import { saveThumbnails } from "@/lib/thumbnail-store";
 
 const AGENT_LABELS: Record<TeamBAgentId, string> = {
   "tb-manager": "Manager Agent",
@@ -172,26 +173,22 @@ export default function TeamBProgressPage() {
 
       if (event.data) {
         const output = event.data as TeamBOutput;
-        const thumbnailUrls = output.thumbnailUrls ?? [];
-
-        const outputWithoutThumbnails = { ...output, thumbnailUrls: [] };
+        const outputWithoutThumbnails = { ...output, thumbnailUrls: [], platformThumbnails: undefined };
         sessionStorage.setItem("teamBOutput", JSON.stringify(outputWithoutThumbnails));
 
-        if (thumbnailUrls.length > 0) {
-          try {
-            sessionStorage.setItem("teamBThumbnailUrls", JSON.stringify(thumbnailUrls));
-          } catch {
-            console.warn("[team-b progress] サムネイル保存失敗");
-            sessionStorage.setItem(
-              "teamBThumbnailUrls",
-              JSON.stringify([
-                "https://placehold.co/1344x768/1e40af/ffffff?text=改善サムネイル+1",
-                "https://placehold.co/1344x768/1d4ed8/ffffff?text=改善サムネイル+2",
-                "https://placehold.co/1344x768/2563eb/ffffff?text=改善サムネイル+3",
-              ])
-            );
-          }
+        // 媒体別にIndexedDBに保存
+        const pt = output.platformThumbnails;
+        const saves: Promise<void>[] = [];
+        if (pt?.indeed?.length) saves.push(saveThumbnails("teamB-indeed", pt.indeed));
+        if (pt?.airwork?.length) saves.push(saveThumbnails("teamB-airwork", pt.airwork));
+        if (pt?.jobmedley?.length) saves.push(saveThumbnails("teamB-jobmedley", pt.jobmedley));
+        // フォールバック: platformThumbnailsがない場合は旧形式で保存
+        if (!pt && output.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails(`teamB-${output.platform}`, output.thumbnailUrls));
         }
+        Promise.all(saves).catch(() => {
+          console.warn("[team-b progress] サムネイル保存失敗");
+        });
       }
 
       setTimeout(() => {

@@ -2,11 +2,15 @@
 
 import { JobMedleyPosting } from "@/types/platform";
 import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Pencil } from "lucide-react";
 import { useState } from "react";
+import { ThumbnailPreview } from "./ThumbnailPreview";
 
 interface JobMedleyOutputProps {
   posting: JobMedleyPosting;
+  thumbnailUrls?: string[];
+  editable?: boolean;
+  onFieldChange?: (field: string, value: string) => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -30,11 +34,18 @@ function FieldBlock({
   label,
   value,
   charLimit,
+  editable,
+  fieldKey,
+  onFieldChange,
 }: {
   label: string;
   value: string;
   charLimit?: number;
+  editable?: boolean;
+  fieldKey?: string;
+  onFieldChange?: (field: string, value: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
   const count = value.length;
   const isOver = charLimit ? count > charLimit : false;
 
@@ -48,17 +59,52 @@ function FieldBlock({
               {count}/{charLimit}文字
             </span>
           )}
+          {editable && !isEditing && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditing(true)}
+              className="h-6 px-2 text-xs"
+            >
+              <Pencil className="w-3 h-3 mr-1" />
+              編集
+            </Button>
+          )}
           <CopyButton text={value} />
         </div>
       </div>
-      <div className="bg-gray-50 border rounded-md p-3 text-sm whitespace-pre-wrap">
-        {value}
-      </div>
+      {isEditing && editable ? (
+        <div className="space-y-1">
+          <textarea
+            className="w-full border rounded-md p-3 text-sm min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={value}
+            onChange={(e) => {
+              if (fieldKey && onFieldChange) {
+                onFieldChange(fieldKey, e.target.value);
+              }
+            }}
+          />
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(false)}
+              className="text-xs"
+            >
+              閉じる
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gray-50 border rounded-md p-3 text-sm whitespace-pre-wrap">
+          {value}
+        </div>
+      )}
     </div>
   );
 }
 
-export function JobMedleyOutput({ posting }: JobMedleyOutputProps) {
+export function JobMedleyOutput({ posting, thumbnailUrls, editable, onFieldChange }: JobMedleyOutputProps) {
   const copyAll = async () => {
     const allText = `【訴求文タイトル】
 ${posting.appealTitle}
@@ -98,29 +144,40 @@ ${posting.selectionProcess}`;
     await navigator.clipboard.writeText(allText);
   };
 
+  const urls = thumbnailUrls ?? [];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">JobMedley 求人原稿</h2>
+        <h2 className="text-xl font-bold">ジョブメドレー 求人原稿</h2>
         <Button onClick={copyAll} variant="outline" size="sm">
           <Copy className="w-4 h-4 mr-2" />
           全文コピー
         </Button>
       </div>
 
+      {urls.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">
+            サムネイル（{urls.length}枚）
+          </h3>
+          <ThumbnailPreview urls={urls} />
+        </div>
+      )}
+
       <div className="space-y-4">
-        <FieldBlock label="訴求文タイトル" value={posting.appealTitle} charLimit={30} />
-        <FieldBlock label="訴求文" value={posting.appealText} charLimit={300} />
-        <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={500} />
-        <FieldBlock label="雇用形態と給与" value={posting.employmentTypeAndSalary} />
-        <FieldBlock label="待遇" value={posting.benefits} />
-        <FieldBlock label="教育体制・研修" value={posting.trainingSystem} />
-        <FieldBlock label="勤務時間・休憩時間" value={posting.workingHours} />
-        <FieldBlock label="休日" value={posting.holidays} />
-        <FieldBlock label="応募要件" value={posting.requirements} />
-        <FieldBlock label="歓迎要件" value={posting.welcomeRequirements} />
-        <FieldBlock label="アクセス" value={posting.access} />
-        <FieldBlock label="選考プロセス" value={posting.selectionProcess} />
+        <FieldBlock label="訴求文タイトル" value={posting.appealTitle} charLimit={30} editable={editable} fieldKey="appealTitle" onFieldChange={onFieldChange} />
+        <FieldBlock label="訴求文" value={posting.appealText} charLimit={300} editable={editable} fieldKey="appealText" onFieldChange={onFieldChange} />
+        <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={500} editable={editable} fieldKey="jobDescription" onFieldChange={onFieldChange} />
+        <FieldBlock label="雇用形態と給与" value={posting.employmentTypeAndSalary} editable={editable} fieldKey="employmentTypeAndSalary" onFieldChange={onFieldChange} />
+        <FieldBlock label="待遇" value={posting.benefits} editable={editable} fieldKey="benefits" onFieldChange={onFieldChange} />
+        <FieldBlock label="教育体制・研修" value={posting.trainingSystem} editable={editable} fieldKey="trainingSystem" onFieldChange={onFieldChange} />
+        <FieldBlock label="勤務時間・休憩時間" value={posting.workingHours} editable={editable} fieldKey="workingHours" onFieldChange={onFieldChange} />
+        <FieldBlock label="休日" value={posting.holidays} editable={editable} fieldKey="holidays" onFieldChange={onFieldChange} />
+        <FieldBlock label="応募要件" value={posting.requirements} editable={editable} fieldKey="requirements" onFieldChange={onFieldChange} />
+        <FieldBlock label="歓迎要件" value={posting.welcomeRequirements} editable={editable} fieldKey="welcomeRequirements" onFieldChange={onFieldChange} />
+        <FieldBlock label="アクセス" value={posting.access} editable={editable} fieldKey="access" onFieldChange={onFieldChange} />
+        <FieldBlock label="選考プロセス" value={posting.selectionProcess} editable={editable} fieldKey="selectionProcess" onFieldChange={onFieldChange} />
       </div>
     </div>
   );

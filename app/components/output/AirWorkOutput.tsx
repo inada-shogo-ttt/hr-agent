@@ -2,13 +2,15 @@
 
 import { AirWorkPosting } from "@/types/platform";
 import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Pencil } from "lucide-react";
 import { useState } from "react";
 import { ThumbnailPreview } from "./ThumbnailPreview";
 
 interface AirWorkOutputProps {
   posting: AirWorkPosting;
   thumbnailUrls: string[];
+  editable?: boolean;
+  onFieldChange?: (field: string, value: string) => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -32,11 +34,18 @@ function FieldBlock({
   label,
   value,
   charLimit,
+  editable,
+  fieldKey,
+  onFieldChange,
 }: {
   label: string;
   value: string;
   charLimit?: number;
+  editable?: boolean;
+  fieldKey?: string;
+  onFieldChange?: (field: string, value: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
   const count = value.length;
   const isOver = charLimit ? count > charLimit : false;
 
@@ -50,17 +59,52 @@ function FieldBlock({
               {count}/{charLimit}文字
             </span>
           )}
+          {editable && !isEditing && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditing(true)}
+              className="h-6 px-2 text-xs"
+            >
+              <Pencil className="w-3 h-3 mr-1" />
+              編集
+            </Button>
+          )}
           <CopyButton text={value} />
         </div>
       </div>
-      <div className="bg-gray-50 border rounded-md p-3 text-sm whitespace-pre-wrap">
-        {value}
-      </div>
+      {isEditing && editable ? (
+        <div className="space-y-1">
+          <textarea
+            className="w-full border rounded-md p-3 text-sm min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={value}
+            onChange={(e) => {
+              if (fieldKey && onFieldChange) {
+                onFieldChange(fieldKey, e.target.value);
+              }
+            }}
+          />
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(false)}
+              className="text-xs"
+            >
+              閉じる
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gray-50 border rounded-md p-3 text-sm whitespace-pre-wrap">
+          {value}
+        </div>
+      )}
     </div>
   );
 }
 
-export function AirWorkOutput({ posting, thumbnailUrls }: AirWorkOutputProps) {
+export function AirWorkOutput({ posting, thumbnailUrls, editable, onFieldChange }: AirWorkOutputProps) {
   const copyAll = async () => {
     const allText = `【職種名】
 ${posting.jobTitle}
@@ -103,7 +147,7 @@ ${posting.selectionProcess}`;
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">AirWork 求人原稿</h2>
+        <h2 className="text-xl font-bold">エアワーク 求人原稿</h2>
         <Button onClick={copyAll} variant="outline" size="sm">
           <Copy className="w-4 h-4 mr-2" />
           全文コピー
@@ -111,18 +155,18 @@ ${posting.selectionProcess}`;
       </div>
 
       <div className="space-y-4">
-        <FieldBlock label="職種名" value={posting.jobTitle} charLimit={30} />
-        <FieldBlock label="キャッチコピー" value={posting.catchphrase} charLimit={40} />
-        <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={600} />
-        <FieldBlock label="勤務地" value={posting.location} />
-        <FieldBlock label="求める人材" value={posting.requirements} charLimit={200} />
-        <FieldBlock label="採用予定人数" value={posting.numberOfHires} />
-        <FieldBlock label="給与" value={posting.salary} />
-        <FieldBlock label="勤務形態" value={posting.workStyle} />
-        <FieldBlock label="休日・休暇" value={posting.holidays} />
-        <FieldBlock label="社会保険" value={posting.socialInsurance} />
-        <FieldBlock label="福利厚生" value={posting.benefits} />
-        <FieldBlock label="選考の流れ" value={posting.selectionProcess} />
+        <FieldBlock label="職種名" value={posting.jobTitle} charLimit={30} editable={editable} fieldKey="jobTitle" onFieldChange={onFieldChange} />
+        <FieldBlock label="キャッチコピー" value={posting.catchphrase} charLimit={40} editable={editable} fieldKey="catchphrase" onFieldChange={onFieldChange} />
+        <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={600} editable={editable} fieldKey="jobDescription" onFieldChange={onFieldChange} />
+        <FieldBlock label="勤務地" value={posting.location} editable={editable} fieldKey="location" onFieldChange={onFieldChange} />
+        <FieldBlock label="求める人材" value={posting.requirements} charLimit={200} editable={editable} fieldKey="requirements" onFieldChange={onFieldChange} />
+        <FieldBlock label="採用予定人数" value={posting.numberOfHires} editable={editable} fieldKey="numberOfHires" onFieldChange={onFieldChange} />
+        <FieldBlock label="給与" value={posting.salary} editable={editable} fieldKey="salary" onFieldChange={onFieldChange} />
+        <FieldBlock label="勤務形態" value={posting.workStyle} editable={editable} fieldKey="workStyle" onFieldChange={onFieldChange} />
+        <FieldBlock label="休日・休暇" value={posting.holidays} editable={editable} fieldKey="holidays" onFieldChange={onFieldChange} />
+        <FieldBlock label="社会保険" value={posting.socialInsurance} editable={editable} fieldKey="socialInsurance" onFieldChange={onFieldChange} />
+        <FieldBlock label="福利厚生" value={posting.benefits} editable={editable} fieldKey="benefits" onFieldChange={onFieldChange} />
+        <FieldBlock label="選考の流れ" value={posting.selectionProcess} editable={editable} fieldKey="selectionProcess" onFieldChange={onFieldChange} />
       </div>
 
       {thumbnailUrls.length > 0 && (

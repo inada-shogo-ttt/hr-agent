@@ -8,17 +8,19 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, AlertCircle, CheckCircle, Circle, Loader2, XCircle } from "lucide-react";
+import { saveThumbnails } from "@/lib/thumbnail-store";
+import { OfficeScene, OfficeAgent } from "@/app/components/workflow/OfficeScene";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { TeamBOutput } from "@/types/team-b";
 import { AgentStatus } from "@/lib/agents/types";
 
 const AGENT_LABELS: Record<TeamBAgentId, string> = {
-  "tb-manager": "Manager Agent",
-  "tb-metrics-analysis": "数値分析 Agent",
-  "tb-manuscript-analysis": "原稿分析 Agent",
-  "tb-text-improvement": "テキスト改善 Agent",
-  "tb-design-improvement": "デザイン改善 Agent",
-  "tb-budget-optimization": "予算最適化 Agent",
+  "tb-manager": "マネージャーエージェント",
+  "tb-metrics-analysis": "数値分析エージェント",
+  "tb-manuscript-analysis": "原稿分析エージェント",
+  "tb-text-improvement": "テキスト改善エージェント",
+  "tb-design-improvement": "デザイン改善エージェント",
+  "tb-budget-optimization": "予算最適化エージェント",
 };
 
 const AGENT_DESCRIPTIONS: Record<TeamBAgentId, string> = {
@@ -47,6 +49,15 @@ const AGENT_WEIGHTS: Record<TeamBAgentId, number> = {
   "tb-design-improvement": 15,
   "tb-budget-optimization": 10,
 };
+
+const TEAM_B_AGENTS: OfficeAgent[] = [
+  { id: "tb-manager", label: "マネージャー", color: "#3B82F6" },
+  { id: "tb-metrics-analysis", label: "数値分析", color: "#10B981" },
+  { id: "tb-manuscript-analysis", label: "原稿分析", color: "#8B5CF6" },
+  { id: "tb-text-improvement", label: "テキスト改善", color: "#6366F1" },
+  { id: "tb-design-improvement", label: "デザイン改善", color: "#EC4899" },
+  { id: "tb-budget-optimization", label: "予算最適化", color: "#F59E0B" },
+];
 
 function StatusIcon({ status }: { status: AgentStatus | undefined }) {
   switch (status) {
@@ -170,18 +181,23 @@ export default function JobTeamBProgressPage() {
 
       if (event.data) {
         const output = event.data as TeamBOutput;
-        const thumbnailUrls = output.thumbnailUrls ?? [];
-        const outputWithoutThumbnails = { ...output, thumbnailUrls: [] };
+        const outputWithoutThumbnails = { ...output, thumbnailUrls: [], platformThumbnails: undefined };
 
         sessionStorage.setItem("teamBOutput", JSON.stringify(outputWithoutThumbnails));
 
-        if (thumbnailUrls.length > 0) {
-          try {
-            sessionStorage.setItem("teamBThumbnailUrls", JSON.stringify(thumbnailUrls));
-          } catch {
-            console.warn("[team-b progress] サムネイル保存失敗");
-          }
+        // 媒体別にIndexedDBに保存
+        const pt = output.platformThumbnails;
+        const saves: Promise<void>[] = [];
+        if (pt?.indeed?.length) saves.push(saveThumbnails("teamB-indeed", pt.indeed));
+        if (pt?.airwork?.length) saves.push(saveThumbnails("teamB-airwork", pt.airwork));
+        if (pt?.jobmedley?.length) saves.push(saveThumbnails("teamB-jobmedley", pt.jobmedley));
+        // フォールバック: platformThumbnailsがない場合は旧形式で保存
+        if (!pt && output.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails(`teamB-${output.platform}`, output.thumbnailUrls));
         }
+        Promise.all(saves).catch(() => {
+          console.warn("[team-b progress] サムネイル保存失敗");
+        });
 
         // DB に履歴保存
         const inputStr = sessionStorage.getItem("teamBInput");
@@ -195,9 +211,14 @@ export default function JobTeamBProgressPage() {
             inputData: inputData?.existingPosting || null,
             outputData: outputWithoutThumbnails,
             metricsData: inputData?.metrics || null,
-            thumbnailUrls,
+            thumbnailUrls: output.thumbnailUrls ?? [],
           }),
-        }).catch((err) => console.error("Failed to save record:", err));
+        })
+          .then((r) => r.json())
+          .then((record) => {
+            sessionStorage.setItem("teamBRecordId", record.id);
+          })
+          .catch((err) => console.error("Failed to save record:", err));
       }
 
       setTimeout(() => {
@@ -223,6 +244,11 @@ export default function JobTeamBProgressPage() {
         <p className="text-muted-foreground mb-8">
           既存原稿を分析し、改善案を生成しています。このページを閉じないでください。
         </p>
+
+        {/* オフィスシーン */}
+        <div className="mb-6">
+          <OfficeScene agents={TEAM_B_AGENTS} statuses={agentStatuses} progress={progress} />
+        </div>
 
         <Card className="mb-6">
           <CardContent className="pt-6">

@@ -10,4 +10,5 @@
  */
 export type * from './models/Job'
 export type * from './models/JobRecord'
+export type * from './models/ReferencePosting'
 export type * from './commonInputTypes'

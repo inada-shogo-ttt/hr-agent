@@ -385,7 +385,8 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   Job: 'Job',
-  JobRecord: 'JobRecord'
+  JobRecord: 'JobRecord',
+  ReferencePosting: 'ReferencePosting'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -401,7 +402,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "job" | "jobRecord"
+    modelProps: "job" | "jobRecord" | "referencePosting"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -553,6 +554,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ReferencePosting: {
+      payload: Prisma.$ReferencePostingPayload<ExtArgs>
+      fields: Prisma.ReferencePostingFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ReferencePostingFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ReferencePostingFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>
+        }
+        findFirst: {
+          args: Prisma.ReferencePostingFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ReferencePostingFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>
+        }
+        findMany: {
+          args: Prisma.ReferencePostingFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>[]
+        }
+        create: {
+          args: Prisma.ReferencePostingCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>
+        }
+        createMany: {
+          args: Prisma.ReferencePostingCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ReferencePostingCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>[]
+        }
+        delete: {
+          args: Prisma.ReferencePostingDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>
+        }
+        update: {
+          args: Prisma.ReferencePostingUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>
+        }
+        deleteMany: {
+          args: Prisma.ReferencePostingDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ReferencePostingUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ReferencePostingUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>[]
+        }
+        upsert: {
+          args: Prisma.ReferencePostingUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReferencePostingPayload>
+        }
+        aggregate: {
+          args: Prisma.ReferencePostingAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateReferencePosting>
+        }
+        groupBy: {
+          args: Prisma.ReferencePostingGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReferencePostingGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ReferencePostingCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReferencePostingCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -614,6 +689,20 @@ export const JobRecordScalarFieldEnum = {
 } as const
 
 export type JobRecordScalarFieldEnum = (typeof JobRecordScalarFieldEnum)[keyof typeof JobRecordScalarFieldEnum]
+
+
+export const ReferencePostingScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  platform: 'platform',
+  industry: 'industry',
+  jobType: 'jobType',
+  postingData: 'postingData',
+  performance: 'performance',
+  createdAt: 'createdAt'
+} as const
+
+export type ReferencePostingScalarFieldEnum = (typeof ReferencePostingScalarFieldEnum)[keyof typeof ReferencePostingScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -755,6 +844,7 @@ export type PrismaClientOptions = ({
 export type GlobalOmitConfig = {
   job?: Prisma.JobOmit
   jobRecord?: Prisma.JobRecordOmit
+  referencePosting?: Prisma.ReferencePostingOmit
 }
 
 /* Types for Logging */

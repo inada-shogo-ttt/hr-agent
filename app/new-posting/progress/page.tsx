@@ -11,6 +11,7 @@ import { WorkflowTimeline } from "@/app/components/workflow/WorkflowTimeline";
 import { SSEEvent, AgentId, AgentStatus } from "@/lib/agents/types";
 import { AllPlatformPostings } from "@/types/platform";
 import { ChevronLeft, AlertCircle } from "lucide-react";
+import { saveThumbnails } from "@/lib/thumbnail-store";
 
 const TOTAL_AGENTS = 8;
 
@@ -139,33 +140,32 @@ export default function ProgressPage() {
       // すべて空配列に置き換えてから保存し、別キー "thumbnailUrls" に分離する
       if (event.data) {
         const output = event.data as AllPlatformPostings;
-        const thumbnailUrls = output.thumbnailUrls ?? [];
 
         const outputWithoutThumbnails: AllPlatformPostings = {
           ...output,
           thumbnailUrls: [],
+          platformThumbnails: undefined,
           indeed: { ...output.indeed, thumbnailUrls: [] },
           airwork: { ...output.airwork, thumbnailUrls: [] },
+          jobmedley: { ...output.jobmedley, thumbnailUrls: [] },
         };
 
         sessionStorage.setItem("finalOutput", JSON.stringify(outputWithoutThumbnails));
 
-        // サムネイルを別途保存（失敗しても本文表示は継続）
-        if (thumbnailUrls.length > 0) {
-          try {
-            sessionStorage.setItem("thumbnailUrls", JSON.stringify(thumbnailUrls));
-          } catch {
-            console.warn("[progress] サムネイル保存失敗（容量超過）。プレースホルダーを使用します。");
-            sessionStorage.setItem(
-              "thumbnailUrls",
-              JSON.stringify([
-                "https://placehold.co/1344x768/1e40af/ffffff?text=サムネイル+1",
-                "https://placehold.co/1344x768/1d4ed8/ffffff?text=サムネイル+2",
-                "https://placehold.co/1344x768/2563eb/ffffff?text=サムネイル+3",
-              ])
-            );
-          }
+        // 媒体別にIndexedDBに保存
+        const saves: Promise<void>[] = [];
+        if (output.indeed?.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails("teamA-indeed", output.indeed.thumbnailUrls));
         }
+        if (output.airwork?.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails("teamA-airwork", output.airwork.thumbnailUrls));
+        }
+        if (output.jobmedley?.thumbnailUrls?.length > 0) {
+          saves.push(saveThumbnails("teamA-jobmedley", output.jobmedley.thumbnailUrls));
+        }
+        Promise.all(saves).catch(() => {
+          console.warn("[progress] サムネイル保存失敗");
+        });
       }
 
       // 少し待ってから出力ページへ遷移

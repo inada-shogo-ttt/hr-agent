@@ -8,13 +8,17 @@ import { ManuscriptOutput } from "@/app/components/output/ManuscriptOutput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, RefreshCw, Clock } from "lucide-react";
+import { ChevronLeft, RefreshCw, Clock, Save } from "lucide-react";
+import { loadThumbnails } from "@/lib/thumbnail-store";
 
 export default function JobOutputPage() {
   const router = useRouter();
   const params = useParams();
   const jobId = params.id as string;
   const [output, setOutput] = useState<AllPlatformPostings | null>(null);
+  const [editedOutput, setEditedOutput] = useState<AllPlatformPostings | null>(null);
+  const [recordId, setRecordId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   useEffect(() => {
     const stored = sessionStorage.getItem("finalOutput");
@@ -23,28 +27,51 @@ export default function JobOutputPage() {
       return;
     }
 
+    const storedRecordId = sessionStorage.getItem("teamARecordId");
+    if (storedRecordId) setRecordId(storedRecordId);
+
     try {
       const parsed = JSON.parse(stored) as AllPlatformPostings;
 
-      const storedThumbnails = sessionStorage.getItem("thumbnailUrls");
-      if (storedThumbnails) {
-        try {
-          const urls = JSON.parse(storedThumbnails) as string[];
-          parsed.thumbnailUrls = urls;
-          if (parsed.indeed) parsed.indeed.thumbnailUrls = urls;
-          if (parsed.airwork) parsed.airwork.thumbnailUrls = urls;
-        } catch {
-          // パース失敗時は空配列のまま
-        }
-      }
-
-      setOutput(parsed);
+      // IndexedDB から媒体別サムネイルを読み込み
+      Promise.all([
+        loadThumbnails("teamA-indeed"),
+        loadThumbnails("teamA-airwork"),
+        loadThumbnails("teamA-jobmedley"),
+      ]).then(([indeedUrls, airworkUrls, jobmedleyUrls]) => {
+        if (parsed.indeed) parsed.indeed.thumbnailUrls = indeedUrls;
+        if (parsed.airwork) parsed.airwork.thumbnailUrls = airworkUrls;
+        if (parsed.jobmedley) parsed.jobmedley.thumbnailUrls = jobmedleyUrls;
+        parsed.thumbnailUrls = [...indeedUrls, ...airworkUrls, ...jobmedleyUrls];
+        setOutput({ ...parsed });
+        setEditedOutput({ ...parsed });
+      }).catch(() => {
+        setOutput(parsed);
+        setEditedOutput(parsed);
+      });
     } catch {
       router.replace(`/jobs/${jobId}/new-posting`);
     }
   }, [router, jobId]);
 
-  if (!output) {
+  const handleSave = async () => {
+    if (!editedOutput || !recordId) return;
+    setSaveStatus("saving");
+    try {
+      await fetch(`/api/jobs/${jobId}/records/${recordId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outputData: editedOutput }),
+      });
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch (err) {
+      console.error("Failed to save:", err);
+      setSaveStatus("idle");
+    }
+  };
+
+  if (!output || !editedOutput) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-muted-foreground">読み込み中...</p>
@@ -70,7 +97,7 @@ export default function JobOutputPage() {
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold">求人原稿 完成</h1>
               <Badge className="bg-green-100 text-green-700 border-green-200">
-                3媒体対応
+                4媒体対応
               </Badge>
             </div>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -79,6 +106,16 @@ export default function JobOutputPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            {recordId && (
+              <Button
+                onClick={handleSave}
+                variant="default"
+                disabled={saveStatus === "saving"}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {saveStatus === "saving" ? "保存中..." : saveStatus === "saved" ? "保存しました" : "保存"}
+              </Button>
+            )}
             <Link href={`/jobs/${jobId}/rewrite-posting`}>
               <Button variant="outline">
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -92,14 +129,17 @@ export default function JobOutputPage() {
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-blue-700 font-medium">
-                サムネイル画像: {output.thumbnailUrls?.length ?? 0}枚生成済み
+                サムネイル画像: インディード {editedOutput.indeed?.thumbnailUrls?.length ?? 0}枚 / エアワーク {editedOutput.airwork?.thumbnailUrls?.length ?? 0}枚 / ジョブメドレー {editedOutput.jobmedley?.thumbnailUrls?.length ?? 0}枚
               </span>
-              <span className="text-muted-foreground">Indeed / AirWork / JobMedley に対応</span>
             </div>
           </CardContent>
         </Card>
 
-        <ManuscriptOutput output={output} />
+        <ManuscriptOutput
+          output={editedOutput}
+          editable={true}
+          onOutputChange={setEditedOutput}
+        />
       </div>
     </main>
   );
