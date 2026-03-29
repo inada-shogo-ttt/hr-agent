@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, AlertCircle, CheckCircle, Circle, Loader2, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, Circle, Loader2, XCircle } from "lucide-react";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { TeamBOutput } from "@/types/team-b";
 import { AgentStatus } from "@/lib/agents/types";
@@ -200,16 +200,8 @@ export default function TeamBProgressPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <Link
-          href="/rewrite-posting"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          原稿入力に戻る
-        </Link>
-
         <h1 className="text-2xl font-bold mb-2">AIエージェント実行中（原稿改善）</h1>
         <p className="text-muted-foreground mb-8">
           既存原稿を分析し、改善案を生成しています。このページを閉じないでください。

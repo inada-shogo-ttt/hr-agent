@@ -11,6 +11,8 @@ interface AirWorkOutputProps {
   thumbnailUrls: string[];
   editable?: boolean;
   onFieldChange?: (field: string, value: string) => void;
+  onThumbnailsChange?: (urls: string[]) => void;
+  jobId?: string;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -104,7 +106,7 @@ function FieldBlock({
   );
 }
 
-export function AirWorkOutput({ posting, thumbnailUrls, editable, onFieldChange }: AirWorkOutputProps) {
+export function AirWorkOutput({ posting, thumbnailUrls, editable, onFieldChange, onThumbnailsChange, jobId }: AirWorkOutputProps) {
   const copyAll = async () => {
     const allText = `【職種名】
 ${posting.jobTitle}
@@ -154,6 +156,15 @@ ${posting.selectionProcess}`;
         </Button>
       </div>
 
+      {thumbnailUrls.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">
+            サムネイル（{thumbnailUrls.length}枚）
+          </h3>
+          <ThumbnailPreview urls={thumbnailUrls} filenamePrefix="airwork_thumbnail" editable={editable} jobId={jobId} platform="airwork" onUrlsChange={onThumbnailsChange} />
+        </div>
+      )}
+
       <div className="space-y-4">
         <FieldBlock label="職種名" value={posting.jobTitle} charLimit={30} editable={editable} fieldKey="jobTitle" onFieldChange={onFieldChange} />
         <FieldBlock label="キャッチコピー" value={posting.catchphrase} charLimit={40} editable={editable} fieldKey="catchphrase" onFieldChange={onFieldChange} />
@@ -168,15 +179,6 @@ ${posting.selectionProcess}`;
         <FieldBlock label="福利厚生" value={posting.benefits} editable={editable} fieldKey="benefits" onFieldChange={onFieldChange} />
         <FieldBlock label="選考の流れ" value={posting.selectionProcess} editable={editable} fieldKey="selectionProcess" onFieldChange={onFieldChange} />
       </div>
-
-      {thumbnailUrls.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
-            サムネイル（{thumbnailUrls.length}枚）
-          </h3>
-          <ThumbnailPreview urls={thumbnailUrls} />
-        </div>
-      )}
     </div>
   );
 }

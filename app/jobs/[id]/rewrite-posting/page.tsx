@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,8 +12,20 @@ import { ExistingHelloWorkFields } from "@/app/components/forms/ExistingHelloWor
 import { TeamBInput, ExistingPostingFields, IndeedMetrics, AirWorkMetrics } from "@/types/team-b";
 import { Platform } from "@/types/platform";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Loader2, CheckCircle, ImageIcon } from "lucide-react";
+import { Loader2, CheckCircle, ImageIcon, AlertTriangle, BarChart3 } from "lucide-react";
 import { ThumbnailPreview } from "@/app/components/output/ThumbnailPreview";
+
+interface PublishMetric {
+  id: string;
+  platform: string;
+  startDate: string;
+  endDate: string | null;
+  impressions: number | null;
+  clicks: number | null;
+  applications: number | null;
+  cost: number | null;
+  notes: string | null;
+}
 
 export default function JobRewritePostingPage() {
   const params = useParams();
@@ -32,6 +43,7 @@ export default function JobRewritePostingPage() {
   const [loadedFromHistory, setLoadedFromHistory] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
   const [thumbnailUrls, setThumbnailUrls] = useState<string[]>([]);
+  const [publishMetrics, setPublishMetrics] = useState<PublishMetric[]>([]);
 
   // 前回のTeam A出力を自動ロード
   useEffect(() => {
@@ -42,6 +54,32 @@ export default function JobRewritePostingPage() {
 
         if (data.latestThumbnailUrls?.length > 0) {
           setThumbnailUrls(data.latestThumbnailUrls);
+        }
+
+        // PublishMetrics を自動ロード
+        if (data.publishMetrics?.length > 0) {
+          setPublishMetrics(data.publishMetrics);
+          // 対象プラットフォームのメトリクスを自動セット
+          const platformMetrics = data.publishMetrics.filter(
+            (m: PublishMetric) => m.platform === initialPlatform
+          );
+          if (platformMetrics.length > 0) {
+            const latest = platformMetrics[0];
+            if (initialPlatform === "indeed") {
+              setIndeedMetrics({
+                impressions: latest.impressions ?? undefined,
+                clicks: latest.clicks ?? undefined,
+                applications: latest.applications ?? undefined,
+                cpc: latest.cost && latest.clicks ? Math.round(latest.cost / latest.clicks) : undefined,
+              });
+            } else if (initialPlatform === "airwork") {
+              setAirworkMetrics({
+                impressions: latest.impressions ?? undefined,
+                clicks: latest.clicks ?? undefined,
+                applications: latest.applications ?? undefined,
+              });
+            }
+          }
         }
 
         if (data.latestTeamAOutput) {
@@ -137,7 +175,7 @@ export default function JobRewritePostingPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin" />
           前回の原稿データを読み込み中...
@@ -147,16 +185,8 @@ export default function JobRewritePostingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <Link
-          href={`/jobs/${jobId}`}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          求人詳細に戻る
-        </Link>
-
         <h1 className="text-2xl font-bold mb-2">再掲載用原稿改善</h1>
         <p className="text-muted-foreground mb-4">
           AIが既存原稿の課題を分析し、改善案を提案します。
@@ -190,7 +220,70 @@ export default function JobRewritePostingPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ThumbnailPreview urls={thumbnailUrls} />
+              <ThumbnailPreview urls={thumbnailUrls} filenamePrefix="current_thumbnail" />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* PublishMetrics 自動ロード表示 */}
+        {publishMetrics.length > 0 ? (
+          <Card className="mb-6 bg-blue-50 border-blue-200">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 text-sm text-blue-700 mb-2">
+                <BarChart3 className="w-4 h-4" />
+                <span className="font-medium">掲載数値を自動ロードしました</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {publishMetrics
+                  .filter((m) => m.platform === platform)
+                  .slice(0, 1)
+                  .map((m) => (
+                    <div key={m.id} className="contents">
+                      <div className="bg-white rounded px-3 py-2 text-center">
+                        <p className="text-[11px] text-gray-500">掲載期間</p>
+                        <p className="text-sm font-medium">
+                          {m.startDate}
+                          {m.endDate ? ` ~ ${m.endDate}` : " ~"}
+                        </p>
+                      </div>
+                      {m.impressions != null && (
+                        <div className="bg-white rounded px-3 py-2 text-center">
+                          <p className="text-[11px] text-gray-500">表示回数</p>
+                          <p className="text-sm font-medium">{m.impressions.toLocaleString()}</p>
+                        </div>
+                      )}
+                      {m.clicks != null && (
+                        <div className="bg-white rounded px-3 py-2 text-center">
+                          <p className="text-[11px] text-gray-500">クリック数</p>
+                          <p className="text-sm font-medium">{m.clicks.toLocaleString()}</p>
+                        </div>
+                      )}
+                      {m.applications != null && (
+                        <div className="bg-white rounded px-3 py-2 text-center">
+                          <p className="text-[11px] text-gray-500">応募数</p>
+                          <p className="text-sm font-medium">{m.applications.toLocaleString()}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+              <p className="text-[11px] text-blue-600 mt-2">
+                掲載担当が入力した数値がTeam Bの分析に使用されます
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="mb-6 bg-amber-50 border-amber-200">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 text-sm text-amber-700">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="font-medium">
+                  掲載数値がまだ入力されていません
+                </span>
+              </div>
+              <p className="text-xs text-amber-600 mt-1">
+                掲載担当者に数値入力を依頼してください。数値なしでもTeam Bを実行できますが、分析精度が下がります。
+              </p>
             </CardContent>
           </Card>
         )}

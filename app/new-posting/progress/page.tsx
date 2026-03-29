@@ -10,7 +10,7 @@ import { AgentProgress } from "@/app/components/workflow/AgentProgress";
 import { WorkflowTimeline } from "@/app/components/workflow/WorkflowTimeline";
 import { SSEEvent, AgentId, AgentStatus } from "@/lib/agents/types";
 import { AllPlatformPostings } from "@/types/platform";
-import { ChevronLeft, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { saveThumbnails } from "@/lib/thumbnail-store";
 
 const TOTAL_AGENTS = 8;
@@ -178,16 +178,8 @@ export default function ProgressPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <Link
-          href="/new-posting"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          求人情報入力に戻る
-        </Link>
-
         <h1 className="text-2xl font-bold mb-2">AIエージェント実行中</h1>
         <p className="text-muted-foreground mb-8">
           求人原稿を自動生成しています。このページを閉じないでください。

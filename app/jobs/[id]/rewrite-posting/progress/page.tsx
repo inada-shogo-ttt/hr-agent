@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, AlertCircle, CheckCircle, Circle, Loader2, XCircle } from "lucide-react";
-import { saveThumbnails } from "@/lib/thumbnail-store";
+import { AlertCircle, CheckCircle, Circle, Loader2, XCircle } from "lucide-react";
 import { OfficeScene, OfficeAgent } from "@/app/components/workflow/OfficeScene";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { TeamBOutput } from "@/types/team-b";
@@ -88,6 +87,17 @@ export default function JobTeamBProgressPage() {
   const [statusMessage, setStatusMessage] = useState("AIエージェントを起動中...");
   const hasStarted = useRef(false);
 
+  // 離脱防止: 実行中はページを離れる前に警告
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isComplete && !error) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isComplete, error]);
+
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
@@ -131,17 +141,26 @@ export default function JobTeamBProgressPage() {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() || "";
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const event = JSON.parse(line.slice(6)) as TeamBSSEEvent;
-              handleEvent(event);
-            } catch (e) {
-              console.error("Failed to parse SSE event:", e);
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+          const dataLines: string[] = [];
+          for (const line of block.split("\n")) {
+            if (line.startsWith("data: ")) {
+              dataLines.push(line.slice(6));
+            } else if (line.startsWith("data:")) {
+              dataLines.push(line.slice(5));
             }
+          }
+          if (dataLines.length === 0) continue;
+          const jsonStr = dataLines.join("\n");
+          try {
+            const event = JSON.parse(jsonStr) as TeamBSSEEvent;
+            handleEvent(event);
+          } catch (e) {
+            console.error("Failed to parse SSE event:", e);
           }
         }
       }
@@ -151,7 +170,7 @@ export default function JobTeamBProgressPage() {
     }
   };
 
-  const handleEvent = (event: TeamBSSEEvent) => {
+  const handleEvent = async (event: TeamBSSEEvent) => {
     if (event.type === "agent_start") {
       setAgentStatuses((prev) => ({
         ...prev,
@@ -181,44 +200,85 @@ export default function JobTeamBProgressPage() {
 
       if (event.data) {
         const output = event.data as TeamBOutput;
-        const outputWithoutThumbnails = { ...output, thumbnailUrls: [], platformThumbnails: undefined };
-
-        sessionStorage.setItem("teamBOutput", JSON.stringify(outputWithoutThumbnails));
-
-        // 媒体別にIndexedDBに保存
+        // サムネイルを Supabase Storage にアップロード
+        setStatusMessage("サムネイルをアップロード中...");
+        const uploadedThumbnails: string[] = [];
         const pt = output.platformThumbnails;
-        const saves: Promise<void>[] = [];
-        if (pt?.indeed?.length) saves.push(saveThumbnails("teamB-indeed", pt.indeed));
-        if (pt?.airwork?.length) saves.push(saveThumbnails("teamB-airwork", pt.airwork));
-        if (pt?.jobmedley?.length) saves.push(saveThumbnails("teamB-jobmedley", pt.jobmedley));
-        // フォールバック: platformThumbnailsがない場合は旧形式で保存
-        if (!pt && output.thumbnailUrls?.length > 0) {
-          saves.push(saveThumbnails(`teamB-${output.platform}`, output.thumbnailUrls));
+        const platformsToUpload = [
+          { key: "indeed", urls: pt?.indeed },
+          { key: "airwork", urls: pt?.airwork },
+          { key: "jobmedley", urls: pt?.jobmedley },
+        ];
+
+        for (const { key, urls } of platformsToUpload) {
+          if (urls?.length) {
+            try {
+              const uploadRes = await fetch("/api/thumbnails", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ images: urls, jobId, platform: `teamB-${key}` }),
+              });
+              if (uploadRes.ok) {
+                const { urls: uploaded } = await uploadRes.json();
+                uploadedThumbnails.push(...uploaded);
+              }
+            } catch { /* ignore */ }
+          }
         }
-        Promise.all(saves).catch(() => {
-          console.warn("[team-b progress] サムネイル保存失敗");
-        });
+
+        // フォールバック: platformThumbnails がない場合
+        if (!pt && output.thumbnailUrls?.length > 0) {
+          try {
+            const uploadRes = await fetch("/api/thumbnails", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ images: output.thumbnailUrls, jobId, platform: `teamB-${output.platform}` }),
+            });
+            if (uploadRes.ok) {
+              const { urls: uploaded } = await uploadRes.json();
+              uploadedThumbnails.push(...uploaded);
+            }
+          } catch { /* ignore */ }
+        }
+
+        const outputWithStorageUrls = {
+          ...output,
+          thumbnailUrls: uploadedThumbnails,
+          platformThumbnails: undefined,
+        };
+
+        sessionStorage.setItem("teamBOutput", JSON.stringify(outputWithStorageUrls));
 
         // DB に履歴保存
-        const inputStr = sessionStorage.getItem("teamBInput");
-        const inputData = inputStr ? JSON.parse(inputStr) : null;
-        fetch(`/api/jobs/${jobId}/records`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "team-b",
-            platform: output.platform,
-            inputData: inputData?.existingPosting || null,
-            outputData: outputWithoutThumbnails,
-            metricsData: inputData?.metrics || null,
-            thumbnailUrls: output.thumbnailUrls ?? [],
-          }),
-        })
-          .then((r) => r.json())
-          .then((record) => {
+        setStatusMessage("履歴を保存中...");
+        let inputData = null;
+        try {
+          const inputStr = sessionStorage.getItem("teamBInput");
+          if (inputStr) inputData = JSON.parse(inputStr);
+        } catch { /* ignore */ }
+
+        try {
+          const saveRes = await fetch(`/api/jobs/${jobId}/records`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "team-b",
+              platform: output.platform,
+              inputData: inputData?.existingPosting || null,
+              outputData: outputWithStorageUrls,
+              metricsData: inputData?.metrics || null,
+              thumbnailUrls: uploadedThumbnails.length > 0 ? uploadedThumbnails : null,
+            }),
+          });
+          if (saveRes.ok) {
+            const record = await saveRes.json();
             sessionStorage.setItem("teamBRecordId", record.id);
-          })
-          .catch((err) => console.error("Failed to save record:", err));
+          } else {
+            console.error(`Failed to save record (${saveRes.status}):`, await saveRes.text());
+          }
+        } catch (err) {
+          console.error("Failed to save record:", err);
+        }
       }
 
       setTimeout(() => {
@@ -230,20 +290,18 @@ export default function JobTeamBProgressPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <Link
-          href={`/jobs/${jobId}/rewrite-posting`}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          原稿入力に戻る
-        </Link>
-
         <h1 className="text-2xl font-bold mb-2">AIエージェント実行中（原稿改善）</h1>
-        <p className="text-muted-foreground mb-8">
-          既存原稿を分析し、改善案を生成しています。このページを閉じないでください。
+        <p className="text-muted-foreground mb-4">
+          既存原稿を分析し、改善案を生成しています。
         </p>
+        {!isComplete && !error && (
+          <div className="mb-6 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>生成が完了するまで、このページを離れないでください。離れると結果が失われます。</span>
+          </div>
+        )}
 
         {/* オフィスシーン */}
         <div className="mb-6">

@@ -11,6 +11,8 @@ interface IndeedOutputProps {
   thumbnailUrls: string[];
   editable?: boolean;
   onFieldChange?: (field: string, value: string) => void;
+  onThumbnailsChange?: (urls: string[]) => void;
+  jobId?: string;
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -111,7 +113,7 @@ function FieldBlock({
   );
 }
 
-export function IndeedOutput({ posting, thumbnailUrls, editable, onFieldChange }: IndeedOutputProps) {
+export function IndeedOutput({ posting, thumbnailUrls, editable, onFieldChange, onThumbnailsChange, jobId }: IndeedOutputProps) {
   const copyAll = async () => {
     const allText = `【職種名】
 ${posting.jobTitle}
@@ -161,6 +163,15 @@ ${posting.numberOfHires}`;
         </Button>
       </div>
 
+      {thumbnailUrls.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">
+            サムネイル（{thumbnailUrls.length}枚）
+          </h3>
+          <ThumbnailPreview urls={thumbnailUrls} filenamePrefix="indeed_thumbnail" editable={editable} jobId={jobId} platform="indeed" onUrlsChange={onThumbnailsChange} />
+        </div>
+      )}
+
       <div className="space-y-4">
         <FieldBlock label="職種名" value={posting.jobTitle} charLimit={30} editable={editable} fieldKey="jobTitle" onFieldChange={onFieldChange} />
         <FieldBlock label="キャッチコピー" value={posting.catchphrase} charLimit={50} editable={editable} fieldKey="catchphrase" onFieldChange={onFieldChange} />
@@ -181,14 +192,6 @@ ${posting.numberOfHires}`;
         <FieldBlock label="待遇・福利厚生" value={posting.benefits} editable={editable} fieldKey="benefits" onFieldChange={onFieldChange} />
       </div>
 
-      {thumbnailUrls.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
-            サムネイル（{thumbnailUrls.length}枚）
-          </h3>
-          <ThumbnailPreview urls={thumbnailUrls} />
-        </div>
-      )}
     </div>
   );
 }

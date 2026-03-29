@@ -10,13 +10,16 @@ import { JobPostingInput } from "@/types/job-posting";
 import { AllPlatformPostings } from "@/types/platform";
 import { SSEEvent, AgentId } from "@/lib/agents/types";
 import { ReferencePostingData } from "@/types/reference";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5分
 
 function createSSEMessage(event: SSEEvent): string {
-  return `data: ${JSON.stringify(event)}\n\n`;
+  // JSON内の改行をSSE仕様に従って複数行dataに分割
+  const json = JSON.stringify(event);
+  const lines = json.split("\n");
+  return lines.map((line) => `data: ${line}`).join("\n") + "\n\n";
 }
 
 function sendEvent(
@@ -76,10 +79,12 @@ export async function POST(request: NextRequest) {
         // DB から参考原稿を取得（同業種・同職種でフィルタ）
         let userReferences: ReferencePostingData[] = [];
         try {
-          const refs = await prisma.referencePosting.findMany({
-            orderBy: { createdAt: "desc" },
-            take: 5,
-          });
+          const { data: refs } = await supabase
+            .from("ReferencePosting")
+            .select("*")
+            .order("createdAt", { ascending: false })
+            .limit(5);
+          if (!refs) throw new Error("参考原稿の取得に失敗");
           userReferences = refs.map((r) => ({
             id: r.id,
             title: r.title,

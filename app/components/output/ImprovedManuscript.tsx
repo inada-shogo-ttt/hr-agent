@@ -133,6 +133,8 @@ interface ImprovedManuscriptProps {
   thumbnailUrls: string[];
   editable?: boolean;
   onFieldChange?: (field: string, value: string) => void;
+  onThumbnailsChange?: (urls: string[]) => void;
+  jobId?: string;
 }
 
 export function ImprovedManuscript({
@@ -143,6 +145,8 @@ export function ImprovedManuscript({
   thumbnailUrls,
   editable,
   onFieldChange,
+  onThumbnailsChange,
+  jobId,
 }: ImprovedManuscriptProps) {
   const [allCopied, setAllCopied] = useState(false);
   const fields = PLATFORM_FIELD_MAP[platform] || INDEED_FIELDS;
@@ -180,6 +184,15 @@ export function ImprovedManuscript({
         </Button>
       </div>
 
+      {thumbnailUrls.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">
+            サムネイル（{thumbnailUrls.length}枚）
+          </h3>
+          <ThumbnailPreview urls={thumbnailUrls} filenamePrefix="improved_thumbnail" editable={editable} jobId={jobId} platform={platform} onUrlsChange={onThumbnailsChange} />
+        </div>
+      )}
+
       <div className="space-y-4">
         {visibleFields.map((f) => {
           const value = String(merged[f.key] ?? "");
@@ -198,15 +211,6 @@ export function ImprovedManuscript({
           );
         })}
       </div>
-
-      {thumbnailUrls.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
-            サムネイル（{thumbnailUrls.length}枚）
-          </h3>
-          <ThumbnailPreview urls={thumbnailUrls} />
-        </div>
-      )}
     </div>
   );
 }

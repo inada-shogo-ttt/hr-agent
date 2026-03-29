@@ -1,0 +1,98 @@
+<h2>アクションボタンの配置案</h2>
+<p class="subtitle">ステータスに応じたボタンを1箇所にまとめる方法を3案用意しました</p>
+
+<div class="options">
+  <!-- 案A: ステータスバー型 -->
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>ステータスバー型（推奨）</h3>
+      <p>ヘッダー直下にステータスに応じたアクションバーを1つだけ表示。全ボタンがここに集約される</p>
+      <div style="margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; font-size: 13px;">
+        <!-- ヘッダー -->
+        <div style="padding: 16px; border-bottom: 1px solid #f3f4f6;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="font-size: 18px; font-weight: 700;">有料老人ホームたいよう本館</span>
+            <span style="background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-size: 11px;">正社員</span>
+            <span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 11px;">確定済み</span>
+          </div>
+          <span style="color: #9ca3af; font-size: 13px;">日勤介護</span>
+        </div>
+        <!-- アクションバー（confirmed時） -->
+        <div style="padding: 12px 16px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 8px;">
+            <div style="padding: 6px 14px; background: #111; color: white; border-radius: 6px; font-size: 12px; font-weight: 500;">📤 掲載依頼</div>
+            <div style="padding: 6px 14px; background: #ea580c; color: white; border-radius: 6px; font-size: 12px; font-weight: 500;">✏️ 修正依頼</div>
+            <div style="padding: 6px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; color: #6b7280;">🔄 Team B 改善</div>
+          </div>
+          <span style="font-size: 11px; color: #22c55e;">✓ 保存済み</span>
+        </div>
+        <!-- コンテンツ（アクションバーの下は原稿のみ） -->
+        <div style="padding: 16px; color: #9ca3af; font-size: 12px; text-align: center;">
+          ↓ 掲載依頼状況 / 最新の原稿 / 実行履歴 がここに続く（ボタンなし）
+        </div>
+      </div>
+      <div style="margin-top: 8px; font-size: 11px; color: #6b7280;">
+        <strong>draft時:</strong> 「Team A 原稿作成」「確定する」<br>
+        <strong>confirmed時:</strong> 「掲載依頼」「修正依頼」「Team B 改善」<br>
+        <strong>awaiting_republish時:</strong> 「Team B 改善」
+      </div>
+    </div>
+  </div>
+
+  <!-- 案B: フローティングアクションバー -->
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>固定フッターバー型</h3>
+      <p>画面下部に固定のアクションバーを表示。スクロールしても常に見える</p>
+      <div style="margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; font-size: 13px; position: relative; height: 200px;">
+        <!-- コンテンツ -->
+        <div style="padding: 16px;">
+          <div style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">有料老人ホームたいよう本館</div>
+          <div style="color: #9ca3af; font-size: 12px; margin-bottom: 16px;">日勤介護 ・ 正社員</div>
+          <div style="color: #9ca3af; font-size: 11px;">↓ 原稿や履歴が続く...</div>
+        </div>
+        <!-- 固定フッター -->
+        <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 10px 16px; background: white; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; justify-content: center; box-shadow: 0 -2px 8px rgba(0,0,0,0.05);">
+          <div style="padding: 6px 14px; background: #111; color: white; border-radius: 6px; font-size: 12px;">📤 掲載依頼</div>
+          <div style="padding: 6px 14px; background: #ea580c; color: white; border-radius: 6px; font-size: 12px;">✏️ 修正依頼</div>
+          <div style="padding: 6px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; color: #6b7280;">🔄 Team B</div>
+        </div>
+      </div>
+      <div style="margin-top: 8px; font-size: 11px; color: #6b7280;">
+        常に画面下部に表示。スクロールしても見失わない
+      </div>
+    </div>
+  </div>
+
+  <!-- 案C: サイドパネル型 -->
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>右サイドパネル型</h3>
+      <p>ステータスとアクションを右カラムにまとめて常に表示</p>
+      <div style="margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; font-size: 13px; display: flex;">
+        <!-- メインコンテンツ -->
+        <div style="flex: 1; padding: 16px; border-right: 1px solid #e5e7eb;">
+          <div style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">有料老人ホームたいよう本館</div>
+          <div style="color: #9ca3af; font-size: 12px; margin-bottom: 8px;">日勤介護 ・ 正社員</div>
+          <div style="color: #9ca3af; font-size: 11px;">原稿 / 履歴...</div>
+        </div>
+        <!-- サイドパネル -->
+        <div style="width: 160px; padding: 12px; background: #f8fafc;">
+          <div style="font-size: 11px; font-weight: 600; margin-bottom: 8px; color: #6b7280;">アクション</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="padding: 6px 10px; background: #111; color: white; border-radius: 6px; font-size: 11px; text-align: center;">掲載依頼</div>
+            <div style="padding: 6px 10px; background: #ea580c; color: white; border-radius: 6px; font-size: 11px; text-align: center;">修正依頼</div>
+            <div style="padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 11px; text-align: center; color: #6b7280;">Team B 改善</div>
+          </div>
+          <div style="margin-top: 12px; font-size: 10px; color: #22c55e;">✓ 保存済み</div>
+        </div>
+      </div>
+      <div style="margin-top: 8px; font-size: 11px; color: #6b7280;">
+        右カラムにアクションを集約。デスクトップ向き
+      </div>
+    </div>
+  </div>
+</div>

@@ -5,7 +5,24 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Plus, FileText, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, FileText, Trash2, MoreVertical } from "lucide-react";
+import { toast } from "sonner";
 
 interface ReferencePosting {
   id: string;
@@ -27,6 +44,7 @@ const platformLabels: Record<string, string> = {
 export default function ReferencesPage() {
   const [references, setReferences] = useState<ReferencePosting[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<ReferencePosting | null>(null);
 
   useEffect(() => {
     fetch("/api/references")
@@ -37,26 +55,21 @@ export default function ReferencesPage() {
       });
   }, []);
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm("この参考原稿を削除しますか？")) return;
-
-    await fetch(`/api/references/${id}`, { method: "DELETE" });
-    setReferences((prev) => prev.filter((r) => r.id !== id));
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await fetch(`/api/references/${deleteTarget.id}`, { method: "DELETE" });
+      setReferences((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+      toast.success(`「${deleteTarget.title}」を削除しました`);
+    } catch {
+      toast.error("削除に失敗しました");
+    }
+    setDeleteTarget(null);
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          ダッシュボードに戻る
-        </Link>
-
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold">参考原稿管理</h1>
@@ -73,7 +86,21 @@ export default function ReferencesPage() {
         </div>
 
         {loading ? (
-          <p className="text-center text-muted-foreground py-12">読み込み中...</p>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-4 animate-pulse">
+                    <div className="w-10 h-10 rounded-full bg-gray-200" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-1/3" />
+                      <div className="h-3 bg-gray-200 rounded w-1/4" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         ) : references.length === 0 ? (
           <Card>
             <CardContent className="pt-12 pb-12 text-center">
@@ -114,12 +141,32 @@ export default function ReferencesPage() {
                       <span className="text-xs text-muted-foreground">
                         {new Date(ref.createdAt).toLocaleDateString("ja-JP")}
                       </span>
-                      <button
-                        onClick={(e) => handleDelete(ref.id, e)}
-                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDeleteTarget(ref);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            削除
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </CardContent>
@@ -128,6 +175,27 @@ export default function ReferencesPage() {
           </div>
         )}
       </div>
+
+      {/* 削除確認ダイアログ */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>参考原稿を削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{deleteTarget?.title}」を削除します。この操作は取り消せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

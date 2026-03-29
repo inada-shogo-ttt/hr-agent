@@ -8,13 +8,15 @@ import { runBudgetOptimizationAgent } from "@/lib/agents/team-b/budget-optimizat
 import { TeamBInput, TeamBOutput, IndeedMetrics } from "@/types/team-b";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { ReferencePostingData } from "@/types/reference";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 function createSSEMessage(event: TeamBSSEEvent): string {
-  return `data: ${JSON.stringify(event)}\n\n`;
+  const json = JSON.stringify(event);
+  const lines = json.split("\n");
+  return lines.map((line) => `data: ${line}`).join("\n") + "\n\n";
 }
 
 function sendEvent(
@@ -67,10 +69,12 @@ export async function POST(request: NextRequest) {
         // DB から参考原稿を取得
         let userReferences: ReferencePostingData[] = [];
         try {
-          const refs = await prisma.referencePosting.findMany({
-            orderBy: { createdAt: "desc" },
-            take: 5,
-          });
+          const { data: refs } = await supabase
+            .from("ReferencePosting")
+            .select("*")
+            .order("createdAt", { ascending: false })
+            .limit(5);
+          if (!refs) throw new Error("参考原稿の取得に失敗");
           userReferences = refs.map((r) => ({
             id: r.id,
             title: r.title,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 // GET /api/references — 一覧取得（?industry=xxx&jobType=xxx でフィルタ可）
 export async function GET(request: NextRequest) {
@@ -7,14 +7,19 @@ export async function GET(request: NextRequest) {
   const industry = searchParams.get("industry");
   const jobType = searchParams.get("jobType");
 
-  const where: Record<string, unknown> = {};
-  if (industry) where.industry = { contains: industry };
-  if (jobType) where.jobType = { contains: jobType };
+  let query = supabase
+    .from("ReferencePosting")
+    .select("*")
+    .order("createdAt", { ascending: false });
 
-  const references = await prisma.referencePosting.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-  });
+  if (industry) query = query.ilike("industry", `%${industry}%`);
+  if (jobType) query = query.ilike("jobType", `%${jobType}%`);
+
+  const { data: references, error } = await query;
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json(references);
 }
@@ -31,16 +36,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const reference = await prisma.referencePosting.create({
-    data: {
+  const { data: reference, error } = await supabase
+    .from("ReferencePosting")
+    .insert({
+      id: crypto.randomUUID(),
       title,
       platform,
       industry,
       jobType,
       postingData: typeof postingData === "string" ? postingData : JSON.stringify(postingData),
       performance: performance || null,
-    },
-  });
+      createdAt: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json(reference, { status: 201 });
 }

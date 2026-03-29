@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 // GET /api/jobs/[id] — 求人詳細 + 全履歴
 export async function GET(
@@ -7,18 +7,42 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const job = await prisma.job.findUnique({
-    where: { id },
-    include: {
-      records: { orderBy: { createdAt: "desc" } },
-    },
-  });
 
-  if (!job) {
+  const { data: job, error } = await supabase
+    .from("Job")
+    .select(`
+      *,
+      Office(id, name),
+      JobType(id, name),
+      EmploymentType(id, name)
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error || !job) {
     return NextResponse.json({ error: "求人が見つかりません" }, { status: 404 });
   }
 
-  return NextResponse.json(job);
+  const { data: records } = await supabase
+    .from("JobRecord")
+    .select("*")
+    .eq("jobId", id)
+    .order("createdAt", { ascending: false });
+
+  const { data: publishRequests } = await supabase
+    .from("PublishRequest")
+    .select(`*, assignedUser:User!assignedTo(id, name)`)
+    .eq("jobId", id)
+    .order("createdAt", { ascending: false });
+
+  return NextResponse.json({
+    ...job,
+    officeName: (job.Office as unknown as { name: string } | null)?.name || "",
+    jobTypeName: (job.JobType as unknown as { name: string } | null)?.name || "",
+    employmentTypeName: (job.EmploymentType as unknown as { name: string } | null)?.name || "",
+    records: records || [],
+    publishRequests: publishRequests || [],
+  });
 }
 
 // DELETE /api/jobs/[id] — 求人削除
@@ -27,6 +51,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await prisma.job.delete({ where: { id } });
+
+  const { error } = await supabase.from("Job").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
   return NextResponse.json({ ok: true });
 }

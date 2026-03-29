@@ -84,7 +84,7 @@ export default function Home() {
                   <div className="w-3 h-3 rounded-full bg-green-300" />
                   <div className="ml-3 text-[11px] text-gray-400 font-mono">採用エージェント — ワークフロー</div>
                 </div>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
                     { label: "トレンド調査", pct: 100, color: "bg-emerald-500" },
                     { label: "原稿執筆", pct: 100, color: "bg-blue-500" },
@@ -120,12 +120,12 @@ export default function Home() {
       {/* ===== 使い方ステップ ===== */}
       <section id="how-it-works" className="scroll-mt-16 py-24 bg-white border-y border-gray-200/60">
         <div className="max-w-[1100px] mx-auto px-6">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">How it works</p>
-          <h2 className="text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">How it works</p>
+          <h2 className="text-2xl md:text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
             4ステップで完結
           </h2>
 
-          <div className="grid grid-cols-4 gap-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-0">
             {[
               { step: "01", title: "求人を登録", desc: "事業所名・職種・雇用形態を入力するだけ。PDFの求人票も読み取れます。", icon: Briefcase, accent: "text-gray-900 bg-gray-100" },
               { step: "02", title: "原稿を自動生成", desc: "8つのAIエージェントが連携。トレンド分析からファクトチェックまで一気に。", icon: PenLine, accent: "text-blue-700 bg-blue-50" },
@@ -135,15 +135,15 @@ export default function Home() {
               <div key={item.step} className="relative px-6">
                 {/* コネクティングライン */}
                 {i < 3 && (
-                  <div className="hidden md:block absolute top-8 left-[calc(50%+24px)] w-[calc(100%-48px)] h-px bg-gray-200" />
+                  <div className="hidden lg:block absolute top-8 left-[calc(50%+24px)] w-[calc(100%-48px)] h-px bg-gray-200" />
                 )}
                 <div className="relative flex flex-col items-center text-center">
                   <div className={`w-14 h-14 rounded-2xl ${item.accent} flex items-center justify-center mb-5 shadow-sm`}>
                     <item.icon className="w-6 h-6" />
                   </div>
-                  <div className="text-[11px] font-mono font-medium text-gray-300 mb-2">STEP {item.step}</div>
-                  <h3 className="text-[15px] font-bold text-gray-900 mb-2">{item.title}</h3>
-                  <p className="text-[13px] leading-relaxed text-gray-500">{item.desc}</p>
+                  <div className="text-xs font-mono font-medium text-gray-300 mb-2">STEP {item.step}</div>
+                  <h3 className="text-base font-bold text-gray-900 mb-2">{item.title}</h3>
+                  <p className="text-sm leading-relaxed text-gray-500">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -154,8 +154,8 @@ export default function Home() {
       {/* ===== 2つのチーム ===== */}
       <section className="py-24">
         <div className="max-w-[1100px] mx-auto px-6">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">Two AI Teams</p>
-          <h2 className="text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">Two AI Teams</p>
+          <h2 className="text-2xl md:text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
             作成と改善、それぞれの専門チーム
           </h2>
 
@@ -169,13 +169,13 @@ export default function Home() {
                   <h3 className="text-[17px] font-bold text-gray-900 -mt-0.5">新規原稿自動生成</h3>
                 </div>
               </div>
-              <p className="text-[13px] leading-relaxed text-gray-500 mb-6">
+              <p className="text-sm leading-relaxed text-gray-500 mb-6">
                 求人情報を入力するだけで、最新トレンドに基づいた求人原稿を4媒体分自動作成。
                 8つのAIエージェントが連携して高品質な原稿を生成します。
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {["マネージャー", "トレンド調査", "トレンド分析", "参考原稿選定", "原稿執筆", "サムネイル生成", "ファクトチェック", "フォーマッター"].map((a) => (
-                  <span key={a} className="text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2 py-0.5">{a}</span>
+                  <span key={a} className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2 py-0.5">{a}</span>
                 ))}
               </div>
               {/* 飾りライン */}
@@ -191,13 +191,13 @@ export default function Home() {
                   <h3 className="text-[17px] font-bold text-gray-900 -mt-0.5">再掲載用原稿改善</h3>
                 </div>
               </div>
-              <p className="text-[13px] leading-relaxed text-gray-500 mb-6">
+              <p className="text-sm leading-relaxed text-gray-500 mb-6">
                 掲載数値と過去の改善履歴をもとにAIが課題を分析。
                 テキスト・デザイン・予算の3軸で具体的な改善案を提示します。
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {["マネージャー", "数値分析", "原稿分析", "テキスト改善", "デザイン改善", "予算最適化"].map((a) => (
-                  <span key={a} className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-0.5">{a}</span>
+                  <span key={a} className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-0.5">{a}</span>
                 ))}
               </div>
               <div className="absolute top-0 left-8 right-8 h-[2px] rounded-full bg-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -209,12 +209,12 @@ export default function Home() {
       {/* ===== 対応媒体 ===== */}
       <section className="py-24 bg-white border-y border-gray-200/60">
         <div className="max-w-[1100px] mx-auto px-6">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">Platforms</p>
-          <h2 className="text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">Platforms</p>
+          <h2 className="text-2xl md:text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
             主要4媒体に対応
           </h2>
 
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { name: "Indeed", sub: "インディード", desc: "国内最大級の求人検索エンジン。数値分析・予算最適化に対応。", dotColor: "bg-blue-500" },
               { name: "AirWork", sub: "エアワーク", desc: "リクルート運営の採用管理ツール。掲載数値の分析に対応。", dotColor: "bg-orange-500" },
@@ -224,10 +224,10 @@ export default function Home() {
               <div key={p.name} className="rounded-xl border border-gray-200 bg-[#FAFAF8] p-5 hover:bg-white hover:shadow-md hover:shadow-gray-100 transition-all duration-200">
                 <div className="flex items-center gap-2 mb-3">
                   <div className={`w-2 h-2 rounded-full ${p.dotColor}`} />
-                  <span className="text-[14px] font-bold text-gray-900">{p.name}</span>
+                  <span className="text-sm font-bold text-gray-900">{p.name}</span>
                 </div>
-                <p className="text-[12px] text-gray-400 mb-2">{p.sub}</p>
-                <p className="text-[12px] leading-relaxed text-gray-500">{p.desc}</p>
+                <p className="text-xs text-gray-400 mb-2">{p.sub}</p>
+                <p className="text-sm leading-relaxed text-gray-500">{p.desc}</p>
               </div>
             ))}
           </div>
@@ -237,8 +237,8 @@ export default function Home() {
       {/* ===== 特徴 ===== */}
       <section className="py-24">
         <div className="max-w-[1100px] mx-auto px-6">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">Features</p>
-          <h2 className="text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-400 text-center mb-3">Features</p>
+          <h2 className="text-2xl md:text-[1.75rem] font-bold tracking-tight text-gray-900 text-center mb-14">
             なぜ採用エージェントなのか
           </h2>
 
@@ -262,8 +262,8 @@ export default function Home() {
             ].map((f) => (
               <div key={f.num} className="rounded-xl border border-gray-200 bg-white p-7 hover:shadow-md hover:shadow-gray-100 transition-all duration-200">
                 <div className="text-[32px] font-black text-gray-100 leading-none mb-4">{f.num}</div>
-                <h3 className="text-[15px] font-bold text-gray-900 mb-2">{f.title}</h3>
-                <p className="text-[13px] leading-relaxed text-gray-500">{f.desc}</p>
+                <h3 className="text-base font-bold text-gray-900 mb-2">{f.title}</h3>
+                <p className="text-sm leading-relaxed text-gray-500">{f.desc}</p>
               </div>
             ))}
           </div>

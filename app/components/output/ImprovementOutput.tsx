@@ -11,10 +11,11 @@ interface ImprovementOutputProps {
   output: TeamBOutput;
   originalPosting: ExistingPostingFields;
   editable?: boolean;
+  jobId?: string;
   onOutputChange?: (output: TeamBOutput) => void;
 }
 
-export function ImprovementOutput({ output, originalPosting, editable, onOutputChange }: ImprovementOutputProps) {
+export function ImprovementOutput({ output, originalPosting, editable, jobId, onOutputChange }: ImprovementOutputProps) {
   const hasBudget = output.platform === "indeed" && !!output.budgetRecommendation;
   const changedFields = new Set(Object.keys(output.improvedPosting));
 
@@ -47,7 +48,12 @@ export function ImprovementOutput({ output, originalPosting, editable, onOutputC
           changedFields={changedFields}
           thumbnailUrls={output.thumbnailUrls}
           editable={editable}
+          jobId={jobId}
           onFieldChange={handleFieldChange}
+          onThumbnailsChange={(urls) => {
+            if (!onOutputChange) return;
+            onOutputChange({ ...output, thumbnailUrls: urls });
+          }}
         />
       </TabsContent>
 

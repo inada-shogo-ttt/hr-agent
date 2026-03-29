@@ -2,15 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronLeft } from "lucide-react";
 
 const PLATFORM_FIELDS: Record<string, { key: string; label: string; multiline?: boolean }[]> = {
   indeed: [
@@ -72,7 +71,7 @@ export default function NewReferencePage() {
     }
 
     if (Object.keys(filteredData).length === 0) {
-      alert("原稿データを少なくとも1つ入力してください");
+      toast.error("原稿データを少なくとも1つ入力してください");
       return;
     }
 
@@ -95,21 +94,13 @@ export default function NewReferencePage() {
       router.push("/references");
     } else {
       setIsSubmitting(false);
-      alert("登録に失敗しました");
+      toast.error("登録に失敗しました");
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <Link
-          href="/references"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          参考原稿一覧に戻る
-        </Link>
-
         <Card>
           <CardHeader>
             <CardTitle>参考原稿を登録</CardTitle>

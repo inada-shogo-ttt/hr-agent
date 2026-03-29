@@ -1,0 +1,194 @@
+<h2>画面イメージの確認</h2>
+<p class="subtitle">2つの画面のモックアップです。フィードバックがあればターミナルで教えてください。</p>
+
+<div class="section">
+  <h3>/jobs — 事業所カード一覧</h3>
+  <div class="mockup">
+    <div class="mockup-header">求人管理</div>
+    <div class="mockup-body" style="padding: 20px; background: #fafaf8;">
+      <!-- ヘッダー -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+          <div style="font-size: 20px; font-weight: 700;">求人管理</div>
+          <div style="font-size: 12px; color: #9ca3af;">事業所ごとの求人を管理します</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div style="padding: 6px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; color: #6b7280; cursor: pointer;">📖 参考原稿</div>
+        </div>
+      </div>
+
+      <!-- ステータスフィルタ -->
+      <div style="display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;">
+        <span style="padding: 3px 10px; background: #111; color: white; border-radius: 4px; font-size: 11px;">すべて</span>
+        <span style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; color: #6b7280;">下書き</span>
+        <span style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; color: #6b7280;">レビュー依頼</span>
+        <span style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; color: #6b7280;">承認済み</span>
+        <span style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; color: #6b7280;">掲載済み</span>
+        <span style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; color: #6b7280;">差戻し</span>
+      </div>
+
+      <!-- 事業所カード -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <!-- カード1 -->
+        <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; background: white; cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <div style="width: 36px; height: 36px; background: #dbeafe; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #2563eb; font-weight: 600; font-size: 13px;">🏢</div>
+            <div>
+              <div style="font-weight: 600; font-size: 14px;">有料老人ホームたいよう本館</div>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #6b7280; margin-bottom: 10px;">介護職 ・ 看護師 ・ 生活相談員</div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+            <span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 500;">承認済み 1</span>
+            <span style="background: #f3e8ff; color: #6b21a8; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 500;">掲載済み 1</span>
+            <span style="background: #f3f4f6; color: #6b7280; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 500;">下書き 3</span>
+          </div>
+          <div style="font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between;">
+            <span>5求人</span>
+            <span>→</span>
+          </div>
+        </div>
+
+        <!-- カード2 -->
+        <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; background: white; cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <div style="width: 36px; height: 36px; background: #dbeafe; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #2563eb; font-weight: 600; font-size: 13px;">🏢</div>
+            <div>
+              <div style="font-weight: 600; font-size: 14px;">たいよう2号館</div>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #6b7280; margin-bottom: 10px;">介護職</div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+            <span style="background: #f3f4f6; color: #6b7280; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 500;">下書き 1</span>
+          </div>
+          <div style="font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between;">
+            <span>1求人</span>
+            <span>→</span>
+          </div>
+        </div>
+
+        <!-- カード3 -->
+        <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; background: white; cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <div style="width: 36px; height: 36px; background: #dbeafe; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #2563eb; font-weight: 600; font-size: 13px;">🏢</div>
+            <div>
+              <div style="font-weight: 600; font-size: 14px;">デイサービスひまわり</div>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #6b7280; margin-bottom: 10px;">介護職 ・ 機能訓練指導員</div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+            <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 500;">レビュー依頼 2</span>
+          </div>
+          <div style="font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between;">
+            <span>2求人</span>
+            <span>→</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 32px;">
+  <h3>/jobs/offices/[officeId] — 事業所詳細ページ</h3>
+  <div class="mockup">
+    <div class="mockup-header">有料老人ホームたいよう本館</div>
+    <div class="mockup-body" style="padding: 20px; background: #fafaf8;">
+      <!-- パンくず -->
+      <div style="font-size: 11px; color: #9ca3af; margin-bottom: 16px;">
+        求人管理 <span style="margin: 0 4px;">›</span> <span style="color: #111; font-weight: 500;">有料老人ホームたいよう本館</span>
+      </div>
+
+      <!-- 事業所ヘッダー -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <div style="font-size: 20px; font-weight: 700;">有料老人ホームたいよう本館</div>
+          <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;">3職種 ・ 5求人</div>
+        </div>
+        <div style="padding: 6px 14px; background: #111; color: white; border-radius: 6px; font-size: 12px; cursor: pointer;">+ 職種を追加</div>
+      </div>
+
+      <!-- 職種グループ1: 介護職 -->
+      <div style="border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 12px; background: white; overflow: hidden;">
+        <div style="padding: 14px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-weight: 600; font-size: 14px;">介護職</div>
+          <div style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 5px; font-size: 11px; color: #6b7280; cursor: pointer;">+ 勤務形態を追加</div>
+        </div>
+        <!-- 求人リスト -->
+        <div style="padding: 0;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 13px; font-weight: 500;">正社員</span>
+              <span style="background: #dcfce7; color: #166534; padding: 1px 8px; border-radius: 4px; font-size: 10px;">承認済み</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: #9ca3af;">Team A / 2026/3/28</span>
+              <span style="color: #9ca3af;">→</span>
+            </div>
+          </div>
+          <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 13px; font-weight: 500;">パート</span>
+              <span style="background: #f3f4f6; color: #6b7280; padding: 1px 8px; border-radius: 4px; font-size: 10px;">下書き</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: #9ca3af;">未実行</span>
+              <span style="color: #9ca3af;">→</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 職種グループ2: 看護師 -->
+      <div style="border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 12px; background: white; overflow: hidden;">
+        <div style="padding: 14px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-weight: 600; font-size: 14px;">看護師</div>
+          <div style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 5px; font-size: 11px; color: #6b7280; cursor: pointer;">+ 勤務形態を追加</div>
+        </div>
+        <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 13px; font-weight: 500;">正社員</span>
+            <span style="background: #f3e8ff; color: #6b21a8; padding: 1px 8px; border-radius: 4px; font-size: 10px;">掲載済み</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: #9ca3af;">Team B / indeed / 2026/3/29</span>
+            <span style="color: #9ca3af;">→</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 職種グループ3: 生活相談員 -->
+      <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: white; overflow: hidden;">
+        <div style="padding: 14px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-weight: 600; font-size: 14px;">生活相談員</div>
+          <div style="padding: 3px 10px; border: 1px solid #e5e7eb; border-radius: 5px; font-size: 11px; color: #6b7280; cursor: pointer;">+ 勤務形態を追加</div>
+        </div>
+        <div style="padding: 0;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 13px; font-weight: 500;">正社員</span>
+              <span style="background: #dbeafe; color: #1e40af; padding: 1px 8px; border-radius: 4px; font-size: 10px;">レビュー依頼</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: #9ca3af;">Team A / 2026/3/27</span>
+              <span style="color: #9ca3af;">→</span>
+            </div>
+          </div>
+          <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 13px; font-weight: 500;">契約社員</span>
+              <span style="background: #f3f4f6; color: #6b7280; padding: 1px 8px; border-radius: 4px; font-size: 10px;">下書き</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: #9ca3af;">未実行</span>
+              <span style="color: #9ca3af;">→</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 24px;">各勤務形態の行をクリックすると、現在の <code>/jobs/[id]</code> と同じ求人詳細ページ（Team A/B実行・履歴・コメント）に遷移します。</p>

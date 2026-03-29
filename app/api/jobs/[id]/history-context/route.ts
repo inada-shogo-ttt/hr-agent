@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 // GET /api/jobs/[id]/history-context — Team Bエージェント向け過去データ要約
 export async function GET(
@@ -8,12 +8,17 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const records = await prisma.jobRecord.findMany({
-    where: { jobId: id },
-    orderBy: { createdAt: "asc" },
-  });
+  const { data: records, error } = await supabase
+    .from("JobRecord")
+    .select("*")
+    .eq("jobId", id)
+    .order("createdAt", { ascending: true });
 
-  if (records.length === 0) {
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!records || records.length === 0) {
     return NextResponse.json({ history: null, recordCount: 0 });
   }
 
@@ -26,7 +31,7 @@ export async function GET(
       round: i + 1,
       type: r.type,
       platform: r.platform,
-      date: r.createdAt.toISOString(),
+      date: r.createdAt,
       // Team A の場合：生成された原稿のサマリー
       ...(r.type === "team-a" && output
         ? {
@@ -54,6 +59,13 @@ export async function GET(
   const latestOutput = latestTeamA?.outputData ? JSON.parse(latestTeamA.outputData) : null;
   const latestInput = latestTeamA?.inputData ? JSON.parse(latestTeamA.inputData) : null;
 
+  // PublishMetrics を取得
+  const { data: publishMetrics } = await supabase
+    .from("PublishMetrics")
+    .select("*")
+    .eq("jobId", id)
+    .order("createdAt", { ascending: false });
+
   return NextResponse.json({
     history,
     recordCount: records.length,
@@ -62,5 +74,6 @@ export async function GET(
     latestThumbnailUrls: latestTeamA?.thumbnailUrls
       ? JSON.parse(latestTeamA.thumbnailUrls)
       : [],
+    publishMetrics: publishMetrics || [],
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { AllPlatformPostings } from "@/types/platform";
@@ -8,8 +8,7 @@ import { ManuscriptOutput } from "@/app/components/output/ManuscriptOutput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, RefreshCw, Clock, Save } from "lucide-react";
-import { loadThumbnails } from "@/lib/thumbnail-store";
+import { RefreshCw, Clock, Save, CheckCircle } from "lucide-react";
 
 export default function JobOutputPage() {
   const router = useRouter();
@@ -19,62 +18,116 @@ export default function JobOutputPage() {
   const [editedOutput, setEditedOutput] = useState<AllPlatformPostings | null>(null);
   const [recordId, setRecordId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestOutputRef = useRef<AllPlatformPostings | null>(null);
+
+  // DB から最新レコードを取得するフォールバック
+  async function loadFromDB(): Promise<{ output: AllPlatformPostings; recordId: string } | null> {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/records`);
+      if (!res.ok) return null;
+      const records = await res.json();
+      const teamARecord = records.find((r: { type: string }) => r.type === "team-a");
+      if (!teamARecord?.outputData) return null;
+      const parsed = typeof teamARecord.outputData === "string"
+        ? JSON.parse(teamARecord.outputData)
+        : teamARecord.outputData;
+      return { output: parsed as AllPlatformPostings, recordId: teamARecord.id };
+    } catch {
+      return null;
+    }
+  }
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("finalOutput");
-    if (!stored) {
-      router.replace(`/jobs/${jobId}/new-posting`);
-      return;
+    async function loadData() {
+      // まず sessionStorage を試す
+      let parsed: AllPlatformPostings | null = null;
+      let rid: string | null = null;
+
+      const stored = sessionStorage.getItem("finalOutput");
+      const storedRecordId = sessionStorage.getItem("teamARecordId");
+
+      if (stored) {
+        try {
+          parsed = JSON.parse(stored) as AllPlatformPostings;
+          rid = storedRecordId;
+        } catch {
+          parsed = null;
+        }
+      }
+
+      // sessionStorage がない or パース失敗 → DB から取得
+      if (!parsed) {
+        const dbData = await loadFromDB();
+        if (dbData) {
+          parsed = dbData.output;
+          rid = dbData.recordId;
+        }
+      }
+
+      if (!parsed) {
+        router.replace(`/jobs/${jobId}/new-posting`);
+        return;
+      }
+
+      if (rid) setRecordId(rid);
+
+      // サムネイルURLはSupabase StorageのURLとして出力データ内に含まれている
+      setOutput({ ...parsed });
+      setEditedOutput({ ...parsed });
     }
 
-    const storedRecordId = sessionStorage.getItem("teamARecordId");
-    if (storedRecordId) setRecordId(storedRecordId);
-
-    try {
-      const parsed = JSON.parse(stored) as AllPlatformPostings;
-
-      // IndexedDB から媒体別サムネイルを読み込み
-      Promise.all([
-        loadThumbnails("teamA-indeed"),
-        loadThumbnails("teamA-airwork"),
-        loadThumbnails("teamA-jobmedley"),
-      ]).then(([indeedUrls, airworkUrls, jobmedleyUrls]) => {
-        if (parsed.indeed) parsed.indeed.thumbnailUrls = indeedUrls;
-        if (parsed.airwork) parsed.airwork.thumbnailUrls = airworkUrls;
-        if (parsed.jobmedley) parsed.jobmedley.thumbnailUrls = jobmedleyUrls;
-        parsed.thumbnailUrls = [...indeedUrls, ...airworkUrls, ...jobmedleyUrls];
-        setOutput({ ...parsed });
-        setEditedOutput({ ...parsed });
-      }).catch(() => {
-        setOutput(parsed);
-        setEditedOutput(parsed);
-      });
-    } catch {
-      router.replace(`/jobs/${jobId}/new-posting`);
-    }
+    loadData();
   }, [router, jobId]);
 
-  const handleSave = async () => {
-    if (!editedOutput || !recordId) return;
+  // 自動保存（2秒デバウンス）
+  const autoSave = useCallback(async (data: AllPlatformPostings) => {
+    if (!recordId) return;
     setSaveStatus("saving");
     try {
-      await fetch(`/api/jobs/${jobId}/records/${recordId}`, {
+      const res = await fetch(`/api/jobs/${jobId}/records/${recordId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outputData: editedOutput }),
+        body: JSON.stringify({ outputData: data }),
       });
-      setSaveStatus("saved");
-      setTimeout(() => setSaveStatus("idle"), 2000);
-    } catch (err) {
-      console.error("Failed to save:", err);
+      if (res.ok) {
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } else {
+        setSaveStatus("idle");
+      }
+    } catch {
       setSaveStatus("idle");
     }
+  }, [jobId, recordId]);
+
+  function handleOutputChange(newOutput: AllPlatformPostings) {
+    setEditedOutput(newOutput);
+    latestOutputRef.current = newOutput;
+
+    // デバウンス自動保存
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      if (latestOutputRef.current) {
+        autoSave(latestOutputRef.current);
+      }
+    }, 2000);
+  }
+
+  // 手動保存
+  const handleManualSave = async () => {
+    if (!editedOutput || !recordId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    await autoSave(editedOutput);
   };
 
   if (!output || !editedOutput) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-muted-foreground">読み込み中...</p>
+      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+          読み込み中...
+        </div>
       </main>
     );
   }
@@ -82,16 +135,8 @@ export default function JobOutputPage() {
   const generatedAt = new Date(output.generatedAt).toLocaleString("ja-JP");
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <Link
-          href={`/jobs/${jobId}`}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          求人詳細に戻る
-        </Link>
-
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">
@@ -105,21 +150,35 @@ export default function JobOutputPage() {
               生成日時: {generatedAt}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 mr-2">
+              {saveStatus === "saving" && (
+                <>
+                  <div className="w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                  保存中...
+                </>
+              )}
+              {saveStatus === "saved" && (
+                <>
+                  <CheckCircle className="w-3 h-3 text-green-500" />
+                  保存済み
+                </>
+              )}
+            </div>
             {recordId && (
               <Button
-                onClick={handleSave}
+                onClick={handleManualSave}
                 variant="default"
                 disabled={saveStatus === "saving"}
+                size="sm"
               >
-                <Save className="w-4 h-4 mr-2" />
-                {saveStatus === "saving" ? "保存中..." : saveStatus === "saved" ? "保存しました" : "保存"}
+                <Save className="w-4 h-4 mr-1.5" />
+                保存
               </Button>
             )}
-            <Link href={`/jobs/${jobId}/rewrite-posting`}>
-              <Button variant="outline">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                この原稿を改善する
+            <Link href={`/jobs/${jobId}`}>
+              <Button variant="outline" size="sm">
+                求人詳細へ
               </Button>
             </Link>
           </div>
@@ -138,7 +197,8 @@ export default function JobOutputPage() {
         <ManuscriptOutput
           output={editedOutput}
           editable={true}
-          onOutputChange={setEditedOutput}
+          jobId={jobId}
+          onOutputChange={handleOutputChange}
         />
       </div>
     </main>

@@ -2,5 +2,12 @@
     "drawio": {
       "command": "npx",
       "args": ["-y", "@anthropic/draw.io-mcp"]
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=dompkxwgpttkngcukagy&read_only=true",
+      "headers": {
+        "Authorization": "Bearer sbp_a3ea88aa957fcbb7c890eed31ea0d93bab277a01"
+      }
     }
-  }
+}

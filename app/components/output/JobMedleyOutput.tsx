@@ -11,6 +11,8 @@ interface JobMedleyOutputProps {
   thumbnailUrls?: string[];
   editable?: boolean;
   onFieldChange?: (field: string, value: string) => void;
+  onThumbnailsChange?: (urls: string[]) => void;
+  jobId?: string;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -104,7 +106,7 @@ function FieldBlock({
   );
 }
 
-export function JobMedleyOutput({ posting, thumbnailUrls, editable, onFieldChange }: JobMedleyOutputProps) {
+export function JobMedleyOutput({ posting, thumbnailUrls, editable, onFieldChange, onThumbnailsChange, jobId }: JobMedleyOutputProps) {
   const copyAll = async () => {
     const allText = `【訴求文タイトル】
 ${posting.appealTitle}
@@ -161,7 +163,7 @@ ${posting.selectionProcess}`;
           <h3 className="text-sm font-medium text-gray-700 mb-2">
             サムネイル（{urls.length}枚）
           </h3>
-          <ThumbnailPreview urls={urls} />
+          <ThumbnailPreview urls={urls} filenamePrefix="jobmedley_thumbnail" editable={editable} jobId={jobId} platform="jobmedley" onUrlsChange={onThumbnailsChange} />
         </div>
       )}
 

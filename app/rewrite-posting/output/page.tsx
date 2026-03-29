@@ -8,7 +8,7 @@ import { ImprovementOutput } from "@/app/components/output/ImprovementOutput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, RefreshCw, Clock } from "lucide-react";
+import { RefreshCw, Clock } from "lucide-react";
 import { loadThumbnails } from "@/lib/thumbnail-store";
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -57,8 +57,11 @@ export default function TeamBOutputPage() {
 
   if (!output) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-muted-foreground">読み込み中...</p>
+      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+          読み込み中...
+        </div>
       </main>
     );
   }
@@ -66,16 +69,8 @@ export default function TeamBOutputPage() {
   const generatedAt = new Date(output.generatedAt).toLocaleString("ja-JP");
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <Link
-          href="/rewrite-posting"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          原稿入力に戻る
-        </Link>
-
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">

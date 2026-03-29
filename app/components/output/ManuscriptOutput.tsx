@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { AllPlatformPostings } from "@/types/platform";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IndeedOutput } from "./IndeedOutput";
@@ -10,19 +11,47 @@ import { HelloWorkOutput } from "./HelloWorkOutput";
 interface ManuscriptOutputProps {
   output: AllPlatformPostings;
   editable?: boolean;
+  jobId?: string;
   onOutputChange?: (output: AllPlatformPostings) => void;
 }
 
-export function ManuscriptOutput({ output, editable, onOutputChange }: ManuscriptOutputProps) {
+export function ManuscriptOutput({ output, editable, jobId, onOutputChange }: ManuscriptOutputProps) {
+  // 常に最新の output を参照するための ref
+  const outputRef = useRef(output);
+  useEffect(() => {
+    outputRef.current = output;
+  }, [output]);
+
   const handleFieldChange = (platform: "indeed" | "airwork" | "jobmedley" | "hellowork", field: string, value: string) => {
     if (!onOutputChange) return;
+    const current = outputRef.current;
     const updated = {
-      ...output,
+      ...current,
       [platform]: {
-        ...output[platform],
+        ...current[platform],
         [field]: value,
       },
     };
+    outputRef.current = updated;
+    onOutputChange(updated);
+  };
+
+  const handleThumbnailsChange = (platform: "indeed" | "airwork" | "jobmedley", urls: string[]) => {
+    if (!onOutputChange) return;
+    const current = outputRef.current;
+    const updated = {
+      ...current,
+      [platform]: {
+        ...current[platform],
+        thumbnailUrls: urls,
+      },
+      thumbnailUrls: [
+        ...(platform === "indeed" ? urls : current.indeed?.thumbnailUrls || []),
+        ...(platform === "airwork" ? urls : current.airwork?.thumbnailUrls || []),
+        ...(platform === "jobmedley" ? urls : current.jobmedley?.thumbnailUrls || []),
+      ],
+    };
+    outputRef.current = updated;
     onOutputChange(updated);
   };
 
@@ -40,7 +69,9 @@ export function ManuscriptOutput({ output, editable, onOutputChange }: Manuscrip
           posting={output.indeed}
           thumbnailUrls={output.indeed.thumbnailUrls}
           editable={editable}
+          jobId={jobId}
           onFieldChange={(field, value) => handleFieldChange("indeed", field, value)}
+          onThumbnailsChange={(urls) => handleThumbnailsChange("indeed", urls)}
         />
       </TabsContent>
 
@@ -49,7 +80,9 @@ export function ManuscriptOutput({ output, editable, onOutputChange }: Manuscrip
           posting={output.airwork}
           thumbnailUrls={output.airwork.thumbnailUrls}
           editable={editable}
+          jobId={jobId}
           onFieldChange={(field, value) => handleFieldChange("airwork", field, value)}
+          onThumbnailsChange={(urls) => handleThumbnailsChange("airwork", urls)}
         />
       </TabsContent>
 
@@ -58,7 +91,9 @@ export function ManuscriptOutput({ output, editable, onOutputChange }: Manuscrip
           posting={output.jobmedley}
           thumbnailUrls={output.jobmedley.thumbnailUrls}
           editable={editable}
+          jobId={jobId}
           onFieldChange={(field, value) => handleFieldChange("jobmedley", field, value)}
+          onThumbnailsChange={(urls) => handleThumbnailsChange("jobmedley", urls)}
         />
       </TabsContent>
 
