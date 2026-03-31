@@ -3,7 +3,7 @@ import { ManuscriptAnalysisInput, ManuscriptAnalysisOutput } from "./types";
 import { extractJSON } from "@/lib/agents/utils";
 
 export async function runManuscriptAnalysisAgent(input: ManuscriptAnalysisInput): Promise<ManuscriptAnalysisOutput> {
-  const { platform, existingPosting, metricsAnalysis, metricsIssues, historyContext } = input;
+  const { platform, existingPosting, metricsAnalysis, metricsIssues, historyContext, crossJobMemory } = input;
 
   const postingFields = Object.entries(existingPosting)
     .filter(([, v]) => v)
@@ -26,6 +26,10 @@ ${metricsContext}
 
 ## 過去の改善履歴
 ${historyContext?.filter((h: any) => h.type === "team-b").map((h: any) => `- Round ${h.round}（${h.date}）: ${h.improvementCount || 0}箇所改善、課題${h.issuesFound || 0}件検出\n  分析: ${h.manuscriptAnalysis || "なし"}`).join("\n") || "なし（初回分析）"}
+
+## 他の求人から学んだ分析パターン（クロスジョブメモリ）
+以下は過去に他の求人で検出された頻出課題と効果的な改善方針です。同様の問題がないか確認してください。
+${crossJobMemory || "なし（学習データ未蓄積）"}
 
 ## 分析観点
 1. **タイトル・キャッチコピー**: 訴求力、差別化、ターゲット適合性

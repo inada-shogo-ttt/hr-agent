@@ -3,7 +3,7 @@ import { MetricsAnalysisInput, MetricsAnalysisOutput } from "./types";
 import { extractJSON } from "@/lib/agents/utils";
 
 export async function runMetricsAnalysisAgent(input: MetricsAnalysisInput): Promise<MetricsAnalysisOutput> {
-  const { platform, metrics, existingPosting, historyContext } = input;
+  const { platform, metrics, existingPosting, historyContext, crossJobMemory } = input;
 
   const metricsStr = Object.entries(metrics)
     .filter(([, v]) => v !== undefined && v !== null)
@@ -39,6 +39,10 @@ ${platform === "indeed" ? indeedBenchmarks : airworkBenchmarks}
 
 ## 過去の数値データ
 ${historyContext?.filter((h: any) => h.type === "team-b" && h.metrics).map((h: any) => `- Round ${h.round}（${h.date}）: ${JSON.stringify(h.metrics)}`).join("\n") || "なし（初回分析）"}
+
+## 他の求人から学んだ改善パターン（クロスジョブメモリ）
+以下は過去に他の求人で効果があった数値改善パターンです。該当する課題があれば参考にしてください。
+${crossJobMemory || "なし（学習データ未蓄積）"}
 
 ## タスク
 1. 各指標を業界ベンチマークと比較してください

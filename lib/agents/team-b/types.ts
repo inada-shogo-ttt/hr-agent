@@ -44,6 +44,7 @@ export interface MetricsAnalysisInput {
   metrics: IndeedMetrics | AirWorkMetrics;
   existingPosting: ExistingPostingFields;
   historyContext?: unknown[];
+  crossJobMemory?: string;
 }
 
 export interface MetricsAnalysisOutput {
@@ -64,6 +65,7 @@ export interface ManuscriptAnalysisInput {
   metricsAnalysis?: string;
   metricsIssues?: IssueSummary[];
   historyContext?: unknown[];
+  crossJobMemory?: string;
 }
 
 export interface ManuscriptAnalysisOutput {
@@ -79,6 +81,7 @@ export interface TextImprovementInput {
   manuscriptAnalysis: ManuscriptAnalysisOutput;
   metricsIssues?: IssueSummary[];
   userReferences?: ReferencePostingData[];
+  crossJobMemory?: string;
 }
 
 export interface TextImprovementOutput {

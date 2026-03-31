@@ -3,7 +3,7 @@ import { TextImprovementInput, TextImprovementOutput } from "./types";
 import { extractJSON } from "@/lib/agents/utils";
 
 export async function runTextImprovementAgent(input: TextImprovementInput): Promise<TextImprovementOutput> {
-  const { platform, existingPosting, manuscriptAnalysis, metricsIssues, userReferences } = input;
+  const { platform, existingPosting, manuscriptAnalysis, metricsIssues, userReferences, crossJobMemory } = input;
 
   const postingFields = Object.entries(existingPosting)
     .filter(([, v]) => v)
@@ -80,9 +80,19 @@ ${refsText}
 `;
   }
 
+  // クロスジョブメモリセクション
+  let crossJobMemorySection = "";
+  if (crossJobMemory) {
+    crossJobMemorySection = `
+## 過去に効果があった改善パターン（クロスジョブメモリ）
+以下は他の求人で実際に効果があったリライトパターンです。該当するフィールドがあれば積極的に活用してください。
+${crossJobMemory}
+`;
+  }
+
   const prompt = `あなたは求人原稿のリライト専門家です。
 以下の原稿分析結果に基づいて、求人原稿をリライト（改善）してください。
-${userReferencesSection}
+${userReferencesSection}${crossJobMemorySection}
 ## 媒体
 ${platform}
 
