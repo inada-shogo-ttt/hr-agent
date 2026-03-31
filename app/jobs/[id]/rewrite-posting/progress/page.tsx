@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle, Circle, Loader2, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, Circle, Clock, Loader2, XCircle } from "lucide-react";
 import { OfficeScene, OfficeAgent } from "@/app/components/workflow/OfficeScene";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { TeamBOutput } from "@/types/team-b";
@@ -128,13 +128,19 @@ export default function JobTeamBProgressPage() {
         body: JSON.stringify(teamBInput),
       });
 
-      if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 504) {
+          throw new Error("TIMEOUT");
+        }
+        throw new Error(`HTTP error: ${response.status}`);
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("Response body is null");
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let receivedComplete = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -158,15 +164,26 @@ export default function JobTeamBProgressPage() {
           const jsonStr = dataLines.join("\n");
           try {
             const event = JSON.parse(jsonStr) as TeamBSSEEvent;
+            if (event.type === "workflow_complete") receivedComplete = true;
             handleEvent(event);
           } catch (e) {
             console.error("Failed to parse SSE event:", e);
           }
         }
       }
+
+      // ストリームが完了イベントなしに終了した場合はタイムアウトとみなす
+      if (!receivedComplete) {
+        throw new Error("TIMEOUT");
+      }
     } catch (err) {
       console.error("Workflow error:", err);
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      const message = err instanceof Error ? err.message : "エラーが発生しました";
+      if (message === "TIMEOUT") {
+        setError("TIMEOUT");
+      } else {
+        setError(message);
+      }
     }
   };
 
@@ -318,7 +335,26 @@ export default function JobTeamBProgressPage() {
           </CardContent>
         </Card>
 
-        {error && (
+        {error === "TIMEOUT" && (
+          <Card className="mb-6 border-amber-300 bg-amber-50">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <Clock className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium text-amber-800 mb-1">タイムアウトしました</p>
+                  <p className="text-sm text-amber-700">
+                    処理に時間がかかりすぎたため、サーバーとの接続が切断されました。お手数ですが、もう一度やり直してください。
+                  </p>
+                  <Link href={`/jobs/${jobId}/rewrite-posting`} className="mt-3 inline-block">
+                    <Button variant="outline" size="sm">もう一度やり直す</Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {error && error !== "TIMEOUT" && (
           <Card className="mb-6 border-red-200 bg-red-50">
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
