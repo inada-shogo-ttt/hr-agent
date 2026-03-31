@@ -37,6 +37,15 @@ export async function POST(request: NextRequest) {
     async start(controller) {
       const now = () => new Date().toISOString();
 
+      // Vercelプロキシの接続切断を防ぐため、15秒ごとにハートビートを送信
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
+        } catch {
+          // ストリームが既に閉じている場合は無視
+        }
+      }, 15000);
+
       const startAgent = (agentId: AgentId, message: string) => {
         sendEvent(controller, {
           type: "agent_start",
@@ -399,6 +408,7 @@ export async function POST(request: NextRequest) {
           timestamp: now(),
         });
       } finally {
+        clearInterval(heartbeat);
         controller.close();
       }
     },

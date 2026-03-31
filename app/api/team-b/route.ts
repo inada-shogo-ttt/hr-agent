@@ -9,6 +9,7 @@ import { TeamBInput, TeamBOutput, IndeedMetrics } from "@/types/team-b";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { ReferencePostingData } from "@/types/reference";
 import { supabase } from "@/lib/supabase";
+import { getFormattedMemories, saveMemories, updateEffectiveness } from "@/lib/agents/team-b/memory";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -27,6 +28,9 @@ function sendEvent(
 }
 
 interface TeamBRequestBody extends TeamBInput {
+  jobId?: string;
+  industry?: string;
+  jobType?: string;
   historyContext?: unknown[];
   visualStyle?: {
     uniformDescription?: string;
@@ -56,6 +60,15 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       const now = () => new Date().toISOString();
+
+      // Vercelプロキシの接続切断を防ぐため、15秒ごとにハートビートを送信
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
+        } catch {
+          // ストリームが既に閉じている場合は無視
+        }
+      }, 15000);
 
       const startAgent = (agentId: TeamBAgentId, message: string) => {
         sendEvent(controller, { type: "agent_start", agentId, message, timestamp: now() });
@@ -91,6 +104,46 @@ export async function POST(request: NextRequest) {
           console.warn("[team-b] 参考原稿の取得に失敗:", e);
         }
 
+        // historyContext から業界情報を自動抽出
+        let detectedIndustry = input.industry;
+        if (!detectedIndustry && historyContext && historyContext.length > 0) {
+          for (const ctx of historyContext) {
+            const ctxObj = ctx as Record<string, unknown>;
+            const inputData = ctxObj.inputData as Record<string, unknown> | undefined;
+            const common = inputData?.common as Record<string, unknown> | undefined;
+            if (common?.industry) {
+              detectedIndustry = common.industry as string;
+              break;
+            }
+          }
+        }
+
+        // クロスジョブメモリを取得（deep-agents-memory: StoreBackend相当）
+        let crossJobMemory = "";
+        try {
+          crossJobMemory = await getFormattedMemories({
+            platform: input.platform,
+            industry: detectedIndustry || undefined,
+            limit: 15,
+          });
+          if (crossJobMemory && crossJobMemory !== "なし（学習データ未蓄積）") {
+            console.log(`[team-b] クロスジョブメモリをロードしました`);
+          }
+        } catch (e) {
+          console.warn("[team-b] クロスジョブメモリの取得に失敗:", e);
+        }
+
+        // 前回のメトリクスを取得（効果フィードバック用）
+        let previousMetrics: Record<string, number> | null = null;
+        if (historyContext && historyContext.length > 0) {
+          const prevTeamB = [...historyContext]
+            .reverse()
+            .find((h: any) => h.type === "team-b" && h.metrics);
+          if (prevTeamB) {
+            previousMetrics = (prevTeamB as any).metrics;
+          }
+        }
+
         const isIndeed = input.platform === "indeed";
         const isJobMedley = input.platform === "jobmedley";
         const isHelloWork = input.platform === "hellowork";
@@ -117,6 +170,7 @@ export async function POST(request: NextRequest) {
             metrics: input.metrics,
             existingPosting: input.existingPosting,
             historyContext: historyContext,
+            crossJobMemory,
           });
           completeAgent("tb-metrics-analysis", "数値分析完了", {
             summary: metricsAnalysisResult.summary,
@@ -134,6 +188,7 @@ export async function POST(request: NextRequest) {
           metricsAnalysis: metricsAnalysisResult?.summary,
           metricsIssues: metricsAnalysisResult?.issues,
           historyContext: historyContext,
+          crossJobMemory,
         });
         completeAgent("tb-manuscript-analysis", "原稿分析完了", {
           assessment: manuscriptAnalysis.overallAssessment,
@@ -163,6 +218,7 @@ export async function POST(request: NextRequest) {
             manuscriptAnalysis,
             metricsIssues: metricsAnalysisResult?.issues,
             userReferences: userReferences.length > 0 ? userReferences : undefined,
+            crossJobMemory,
           }),
           runDesignImprovementAgent({
             platform: input.platform,
@@ -196,6 +252,32 @@ export async function POST(request: NextRequest) {
           completeAgent("tb-budget-optimization", "Indeed以外のため予算分析スキップ");
         }
 
+        // クロスジョブメモリに学習パターンを保存（非同期・エラー無視）
+        try {
+          await saveMemories({
+            platform: input.platform,
+            improvements: textResult.improvements,
+            issues: allIssues,
+            sourceJobId: input.jobId,
+            industry: detectedIndustry || undefined,
+            jobType: input.jobType,
+          });
+
+          // 前回メトリクスがある場合、効果フィードバックを実行
+          if (previousMetrics && input.metrics) {
+            const currentMetrics = input.metrics as Record<string, number>;
+            const prevCTR = previousMetrics.ctr || 0;
+            const currCTR = currentMetrics.ctr || 0;
+            const improved = currCTR > prevCTR;
+            const categories = allIssues.map((i) => i.category);
+            if (categories.length > 0) {
+              await updateEffectiveness(input.platform, categories, improved);
+            }
+          }
+        } catch (e) {
+          console.warn("[team-b] メモリ保存エラー（続行）:", e);
+        }
+
         // 最終出力を組み立て
         const finalOutput: TeamBOutput = {
           platform: input.platform,
@@ -226,6 +308,7 @@ export async function POST(request: NextRequest) {
           timestamp: now(),
         });
       } finally {
+        clearInterval(heartbeat);
         controller.close();
       }
     },
