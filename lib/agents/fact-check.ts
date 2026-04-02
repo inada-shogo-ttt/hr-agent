@@ -1,4 +1,4 @@
-import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { anthropic, FAST_MODEL } from "@/lib/claude";
 import { FactCheckInput, FactCheckOutput, FactCheckIssue, ManuscriptWritingOutput } from "./types";
 import { extractJSON } from "./utils";
 
@@ -71,7 +71,7 @@ ${JSON.stringify(manuscript, null, 2)}
 
   try {
     const message = await anthropic.messages.create({
-      model: DEFAULT_MODEL,
+      model: FAST_MODEL,
       max_tokens: 8192,
       system: "あなたはJSON生成専門のアシスタントです。指定されたJSON形式のみを出力してください。JSONの前後に説明文やマークダウンを付けないでください。",
       messages: [{ role: "user", content: prompt }],

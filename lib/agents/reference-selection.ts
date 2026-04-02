@@ -1,4 +1,4 @@
-import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { anthropic, FAST_MODEL } from "@/lib/claude";
 import { ReferenceSelectionInput, ReferenceSelectionOutput } from "./types";
 import { extractJSON } from "./utils";
 
@@ -82,7 +82,7 @@ ${userReferencesSection}
 }`;
 
   const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
+    model: FAST_MODEL,
     max_tokens: 4096,
     messages: [
       {

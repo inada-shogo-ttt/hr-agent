@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { anthropic, FAST_MODEL } from "@/lib/claude";
 import { TrendResearchInput, TrendResearchOutput, TrendResearchResult } from "./types";
 import { extractJSON } from "./utils";
 
@@ -20,7 +20,7 @@ export async function runTrendResearchAgent(
   for (const query of searchQueries) {
     try {
       const message = await anthropic.messages.create({
-        model: DEFAULT_MODEL,
+        model: FAST_MODEL,
         max_tokens: 2048,
         tools: [
           {
@@ -96,7 +96,7 @@ export async function runTrendResearchAgent(
 
   // サマリーを生成
   const summaryMessage = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
+    model: FAST_MODEL,
     max_tokens: 512,
     messages: [
       {
@@ -122,7 +122,7 @@ async function getFallbackTrendData(
   prefecture: string
 ): Promise<TrendResearchResult> {
   const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
+    model: FAST_MODEL,
     max_tokens: 1024,
     messages: [
       {

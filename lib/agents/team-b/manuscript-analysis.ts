@@ -1,4 +1,4 @@
-import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { anthropic, FAST_MODEL } from "@/lib/claude";
 import { ManuscriptAnalysisInput, ManuscriptAnalysisOutput } from "./types";
 import { extractJSON } from "@/lib/agents/utils";
 
@@ -53,7 +53,7 @@ ${crossJobMemory || "なし（学習データ未蓄積）"}
 }`;
 
   const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
+    model: FAST_MODEL,
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
   });

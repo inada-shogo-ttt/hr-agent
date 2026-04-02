@@ -1,4 +1,4 @@
-import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { anthropic, FAST_MODEL } from "@/lib/claude";
 import { TrendAnalysisInput, TrendAnalysisOutput } from "./types";
 import { extractJSON } from "./utils";
 
@@ -38,7 +38,7 @@ ${JSON.stringify(trendResearch, null, 2)}
 }`;
 
   const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
+    model: FAST_MODEL,
     max_tokens: 4096,
     system: "あなたはJSON生成専門のアシスタントです。指定されたJSON形式のみを出力してください。JSONの前後に説明文やマークダウンコードブロックを付けないでください。純粋なJSONオブジェクトのみを返してください。重要: JSON文字列値の中に \" を使わないでください。引用には「」を使ってください。",
     messages: [

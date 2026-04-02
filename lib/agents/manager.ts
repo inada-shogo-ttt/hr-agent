@@ -1,4 +1,4 @@
-import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { anthropic, LIGHT_MODEL } from "@/lib/claude";
 import { ManagerInput, ManagerOutput } from "./types";
 import { extractJSON } from "./utils";
 
@@ -79,7 +79,7 @@ ${common.jobDescription}
 }`;
 
   const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
+    model: LIGHT_MODEL,
     max_tokens: 2048,
     messages: [
       {

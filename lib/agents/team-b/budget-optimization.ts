@@ -1,4 +1,4 @@
-import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { anthropic, FAST_MODEL } from "@/lib/claude";
 import { BudgetOptimizationInput, BudgetOptimizationOutput } from "./types";
 import { extractJSON } from "@/lib/agents/utils";
 
@@ -43,7 +43,7 @@ ${metricsAnalysis.summary}
 }`;
 
   const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
+    model: FAST_MODEL,
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });
