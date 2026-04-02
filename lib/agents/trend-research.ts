@@ -14,24 +14,23 @@ export async function runTrendResearchAgent(
     `${jobCategory} 求人 タイトル 応募数 多い`,
   ];
 
-  const results: TrendResearchResult[] = [];
-
-  // web_search ツールを使用してトレンド調査
-  for (const query of searchQueries) {
-    try {
-      const message = await anthropic.messages.create({
-        model: FAST_MODEL,
-        max_tokens: 2048,
-        tools: [
-          {
-            type: "web_search_20250305" as "web_search_20250305",
-            name: "web_search",
-          },
-        ],
-        messages: [
-          {
-            role: "user",
-            content: `以下の求人情報について、最新のトレンドを調査してください。
+  // 3クエリを並列実行してトレンド調査
+  const results = await Promise.all(
+    searchQueries.map(async (query): Promise<TrendResearchResult> => {
+      try {
+        const message = await anthropic.messages.create({
+          model: FAST_MODEL,
+          max_tokens: 2048,
+          tools: [
+            {
+              type: "web_search_20250305" as "web_search_20250305",
+              name: "web_search",
+            },
+          ],
+          messages: [
+            {
+              role: "user",
+              content: `以下の求人情報について、最新のトレンドを調査してください。
 
 検索クエリ: "${query}"
 
@@ -51,43 +50,40 @@ export async function runTrendResearchAgent(
   "salaryRange": "給与相場の説明",
   "trendingBenefits": ["福利厚生1", "福利厚生2"]
 }`,
-          },
-        ],
-      });
-
-      // レスポンスからJSONを抽出
-      let resultText = "";
-      for (const block of message.content) {
-        if (block.type === "text") {
-          resultText += block.text;
-        }
-      }
-
-      if (!resultText.trim()) {
-        console.warn(`[trend-research] No text in response for query "${query}", using fallback`);
-        results.push(await getFallbackTrendData(query, industry, jobCategory, prefecture));
-        continue;
-      }
-
-      try {
-        const result = extractJSON<TrendResearchResult>(resultText, "trend-research/search");
-        results.push(result);
-      } catch {
-        results.push({
-          searchQuery: query,
-          findings: resultText.slice(0, 300),
-          topTitles: [],
-          popularKeywords: [],
-          salaryRange: "調査中",
-          trendingBenefits: [],
+            },
+          ],
         });
+
+        let resultText = "";
+        for (const block of message.content) {
+          if (block.type === "text") {
+            resultText += block.text;
+          }
+        }
+
+        if (!resultText.trim()) {
+          console.warn(`[trend-research] No text in response for query "${query}", using fallback`);
+          return getFallbackTrendData(query, industry, jobCategory, prefecture);
+        }
+
+        try {
+          return extractJSON<TrendResearchResult>(resultText, "trend-research/search");
+        } catch {
+          return {
+            searchQuery: query,
+            findings: resultText.slice(0, 300),
+            topTitles: [],
+            popularKeywords: [],
+            salaryRange: "調査中",
+            trendingBenefits: [],
+          };
+        }
+      } catch (error) {
+        console.error(`[trend-research] Error for query "${query}":`, error);
+        return getFallbackTrendData(query, industry, jobCategory, prefecture);
       }
-    } catch (error) {
-      console.error(`[trend-research] Error for query "${query}":`, error);
-      // web_searchが使えない場合のフォールバック
-      results.push(await getFallbackTrendData(query, industry, jobCategory, prefecture));
-    }
-  }
+    })
+  );
 
   // 結果がない場合はフォールバック
   if (results.length === 0) {
