@@ -120,71 +120,32 @@ export default function JobTeamBProgressPage() {
       });
   }, [router, jobId]);
 
-  const startWorkflow = async (teamBInput: unknown) => {
-    try {
-      const response = await fetch("/api/team-b", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(teamBInput),
-      });
+  const startWorkflow = (teamBInput: unknown) => {
+    const worker = new Worker("/sse-worker.js");
+    worker.postMessage({ url: "/api/team-b", body: teamBInput });
 
-      if (!response.ok) {
-        if (response.status === 504) {
-          throw new Error("TIMEOUT");
+    worker.onmessage = async (e) => {
+      const msg = e.data;
+      if (msg.type === "__worker_event") {
+        handleEvent(msg.event as TeamBSSEEvent);
+      } else if (msg.type === "__worker_error") {
+        console.error("Workflow error:", msg.error);
+        if (msg.error === "TIMEOUT") {
+          setError("TIMEOUT");
+        } else {
+          setError(msg.error);
         }
-        throw new Error(`HTTP error: ${response.status}`);
+        worker.terminate();
+      } else if (msg.type === "__worker_done") {
+        worker.terminate();
       }
+    };
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("Response body is null");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let receivedComplete = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const blocks = buffer.split("\n\n");
-        buffer = blocks.pop() || "";
-
-        for (const block of blocks) {
-          if (!block.trim()) continue;
-          const dataLines: string[] = [];
-          for (const line of block.split("\n")) {
-            if (line.startsWith("data: ")) {
-              dataLines.push(line.slice(6));
-            } else if (line.startsWith("data:")) {
-              dataLines.push(line.slice(5));
-            }
-          }
-          if (dataLines.length === 0) continue;
-          const jsonStr = dataLines.join("\n");
-          try {
-            const event = JSON.parse(jsonStr) as TeamBSSEEvent;
-            if (event.type === "workflow_complete") receivedComplete = true;
-            handleEvent(event);
-          } catch (e) {
-            console.error("Failed to parse SSE event:", e);
-          }
-        }
-      }
-
-      // ストリームが完了イベントなしに終了した場合はタイムアウトとみなす
-      if (!receivedComplete) {
-        throw new Error("TIMEOUT");
-      }
-    } catch (err) {
-      console.error("Workflow error:", err);
-      const message = err instanceof Error ? err.message : "エラーが発生しました";
-      if (message === "TIMEOUT") {
-        setError("TIMEOUT");
-      } else {
-        setError(message);
-      }
-    }
+    worker.onerror = (e) => {
+      console.error("Worker error:", e);
+      setError("ワーカーの実行中にエラーが発生しました");
+      worker.terminate();
+    };
   };
 
   const handleEvent = async (event: TeamBSSEEvent) => {
@@ -314,9 +275,15 @@ export default function JobTeamBProgressPage() {
           既存原稿を分析し、改善案を生成しています。
         </p>
         {!isComplete && !error && (
-          <div className="mb-6 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>生成が完了するまで、このページを離れないでください。離れると結果が失われます。</span>
+          <div className="mb-6 space-y-2">
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>生成が完了するまで、このページを離れないでください。離れると結果が失われます。</span>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>処理中はPCがスリープしないようにしてください。スリープすると接続が切断される場合があります。</span>
+            </div>
           </div>
         )}
 

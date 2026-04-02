@@ -99,61 +99,32 @@ export default function TeamBProgressPage() {
     startWorkflow(JSON.parse(input));
   }, [router]);
 
-  const startWorkflow = async (teamBInput: unknown) => {
-    try {
-      const response = await fetch("/api/team-b", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(teamBInput),
-      });
+  const startWorkflow = (teamBInput: unknown) => {
+    const worker = new Worker("/sse-worker.js");
+    worker.postMessage({ url: "/api/team-b", body: teamBInput });
 
-      if (!response.ok) {
-        if (response.status === 504) {
-          throw new Error("TIMEOUT");
+    worker.onmessage = (e) => {
+      const msg = e.data;
+      if (msg.type === "__worker_event") {
+        handleEvent(msg.event as TeamBSSEEvent);
+      } else if (msg.type === "__worker_error") {
+        console.error("Workflow error:", msg.error);
+        if (msg.error === "TIMEOUT") {
+          setError("TIMEOUT");
+        } else {
+          setError(msg.error);
         }
-        throw new Error(`HTTP error: ${response.status}`);
+        worker.terminate();
+      } else if (msg.type === "__worker_done") {
+        worker.terminate();
       }
+    };
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("Response body is null");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let receivedComplete = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const event = JSON.parse(line.slice(6)) as TeamBSSEEvent;
-              if (event.type === "workflow_complete") receivedComplete = true;
-              handleEvent(event);
-            } catch (e) {
-              console.error("Failed to parse SSE event:", e);
-            }
-          }
-        }
-      }
-
-      if (!receivedComplete) {
-        throw new Error("TIMEOUT");
-      }
-    } catch (err) {
-      console.error("Workflow error:", err);
-      const message = err instanceof Error ? err.message : "エラーが発生しました";
-      if (message === "TIMEOUT") {
-        setError("TIMEOUT");
-      } else {
-        setError(message);
-      }
-    }
+    worker.onerror = (e) => {
+      console.error("Worker error:", e);
+      setError("ワーカーの実行中にエラーが発生しました");
+      worker.terminate();
+    };
   };
 
   const handleEvent = (event: TeamBSSEEvent) => {
@@ -219,9 +190,21 @@ export default function TeamBProgressPage() {
     <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-2">AIエージェント実行中（原稿改善）</h1>
-        <p className="text-muted-foreground mb-8">
-          既存原稿を分析し、改善案を生成しています。このページを閉じないでください。
+        <p className="text-muted-foreground mb-4">
+          既存原稿を分析し、改善案を生成しています。
         </p>
+        {!isComplete && !error && (
+          <div className="mb-6 space-y-2">
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>生成が完了するまで、このページを離れないでください。離れると結果が失われます。</span>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>処理中はPCがスリープしないようにしてください。スリープすると接続が切断される場合があります。</span>
+            </div>
+          </div>
+        )}
 
         <Card className="mb-6">
           <CardContent className="pt-6">
