@@ -115,7 +115,16 @@ function FieldBlock({
 
 export function IndeedOutput({ posting, thumbnailUrls, editable, onFieldChange, onThumbnailsChange, jobId }: IndeedOutputProps) {
   const copyAll = async () => {
-    const allText = `【職種名】
+    const featureTagsLine = posting.featureTags?.length
+      ? `\n【特長タグ】\n${posting.featureTags.join(" / ")}`
+      : "";
+    const screeningLine = posting.screeningQuestions?.length
+      ? `\n【応募者への質問】\n${posting.screeningQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`
+      : "";
+    const allText = `【会社名】
+${posting.companyName}${posting.postalCode ? `（〒${posting.postalCode}）` : ""}
+
+【職種名】
 ${posting.jobTitle}
 
 【キャッチコピー】
@@ -131,10 +140,10 @@ ${posting.appealPoints}
 ${posting.requirements}
 
 【給与】
-${posting.salary}
-
+${posting.salary}${posting.salaryDisplayType ? `（表示方法：${posting.salaryDisplayType}）` : ""}
+${posting.fixedOvertimePay ? `固定残業代：${posting.fixedOvertimePay}\n` : ""}
 【勤務時間】
-${posting.workingHours}
+${posting.workingHours}${posting.monthlyWorkingHours ? `\n${posting.monthlyWorkingHours}` : ""}
 
 【休暇・休日】
 ${posting.holidays}
@@ -148,8 +157,10 @@ ${posting.socialInsurance}
 【アクセス】
 ${posting.access}
 
-${posting.probationPeriod ? `【試用期間】\n${posting.probationPeriod}\n` : ""}【採用予定人数】
-${posting.numberOfHires}`;
+${posting.smokingPolicy ? `【受動喫煙対策】\n${posting.smokingPolicy}\n\n` : ""}${posting.probationPeriod ? `【試用期間】\n${posting.probationPeriod}\n\n` : ""}【採用予定人数】
+${posting.numberOfHires}
+${featureTagsLine}${screeningLine}
+${posting.hiringManagerName ? `\n【採用担当者】\n${posting.hiringManagerName}${posting.contactPhone ? ` / ${posting.contactPhone}` : ""}${posting.contactEmail ? ` / ${posting.contactEmail}` : ""}` : ""}${posting.applicationMethod ? `\n\n【応募経路】\n${posting.applicationMethod}${posting.applicationUrl ? `（${posting.applicationUrl}）` : ""}` : ""}`;
     await navigator.clipboard.writeText(allText);
   };
 
@@ -173,16 +184,32 @@ ${posting.numberOfHires}`;
       )}
 
       <div className="space-y-4">
+        <FieldBlock label="会社名" value={posting.companyName} editable={editable} fieldKey="companyName" onFieldChange={onFieldChange} />
+        {posting.postalCode && (
+          <FieldBlock label="郵便番号" value={posting.postalCode} editable={editable} fieldKey="postalCode" onFieldChange={onFieldChange} />
+        )}
         <FieldBlock label="職種名" value={posting.jobTitle} charLimit={30} editable={editable} fieldKey="jobTitle" onFieldChange={onFieldChange} />
         <FieldBlock label="キャッチコピー" value={posting.catchphrase} charLimit={50} editable={editable} fieldKey="catchphrase" onFieldChange={onFieldChange} />
         <FieldBlock label="採用予定人数" value={posting.numberOfHires} editable={editable} fieldKey="numberOfHires" onFieldChange={onFieldChange} />
         <FieldBlock label="勤務地" value={posting.location} editable={editable} fieldKey="location" onFieldChange={onFieldChange} />
         <FieldBlock label="雇用形態" value={posting.employmentType} editable={editable} fieldKey="employmentType" onFieldChange={onFieldChange} />
         <FieldBlock label="給与" value={posting.salary} editable={editable} fieldKey="salary" onFieldChange={onFieldChange} />
+        {posting.salaryDisplayType && (
+          <FieldBlock label="給与の表示方法" value={posting.salaryDisplayType} editable={editable} fieldKey="salaryDisplayType" onFieldChange={onFieldChange} />
+        )}
+        {posting.fixedOvertimePay && (
+          <FieldBlock label="固定残業代" value={posting.fixedOvertimePay} editable={editable} fieldKey="fixedOvertimePay" onFieldChange={onFieldChange} />
+        )}
         <FieldBlock label="勤務時間" value={posting.workingHours} editable={editable} fieldKey="workingHours" onFieldChange={onFieldChange} />
+        {posting.monthlyWorkingHours && (
+          <FieldBlock label="月間平均所定労働時間" value={posting.monthlyWorkingHours} editable={editable} fieldKey="monthlyWorkingHours" onFieldChange={onFieldChange} />
+        )}
         <FieldBlock label="社会保険" value={posting.socialInsurance} editable={editable} fieldKey="socialInsurance" onFieldChange={onFieldChange} />
         {posting.probationPeriod && (
           <FieldBlock label="試用期間" value={posting.probationPeriod} editable={editable} fieldKey="probationPeriod" onFieldChange={onFieldChange} />
+        )}
+        {posting.smokingPolicy && (
+          <FieldBlock label="受動喫煙対策" value={posting.smokingPolicy} editable={editable} fieldKey="smokingPolicy" onFieldChange={onFieldChange} />
         )}
         <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={500} editable={editable} fieldKey="jobDescription" onFieldChange={onFieldChange} />
         <FieldBlock label="アピールポイント" value={posting.appealPoints} charLimit={300} editable={editable} fieldKey="appealPoints" onFieldChange={onFieldChange} />
@@ -190,6 +217,51 @@ ${posting.numberOfHires}`;
         <FieldBlock label="休暇・休日" value={posting.holidays} editable={editable} fieldKey="holidays" onFieldChange={onFieldChange} />
         <FieldBlock label="アクセス" value={posting.access} editable={editable} fieldKey="access" onFieldChange={onFieldChange} />
         <FieldBlock label="待遇・福利厚生" value={posting.benefits} editable={editable} fieldKey="benefits" onFieldChange={onFieldChange} />
+
+        {posting.featureTags && posting.featureTags.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-gray-700">特長タグ（最大3）</span>
+            <div className="flex gap-2 flex-wrap">
+              {posting.featureTags.map((tag) => (
+                <span key={tag} className="text-xs px-2 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {posting.screeningQuestions && posting.screeningQuestions.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-gray-700">応募者への質問</span>
+            <div className="bg-gray-50 border rounded-md p-3 text-sm space-y-1">
+              {posting.screeningQuestions.map((q, i) => (
+                <div key={i}>
+                  {i + 1}. {q}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(posting.hiringManagerName || posting.contactPhone || posting.contactEmail) && (
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-gray-700">採用担当者・連絡先</span>
+            <div className="bg-gray-50 border rounded-md p-3 text-sm space-y-1">
+              {posting.hiringManagerName && <div>担当者：{posting.hiringManagerName}</div>}
+              {posting.contactPhone && <div>電話：{posting.contactPhone}</div>}
+              {posting.contactEmail && <div>メール：{posting.contactEmail}</div>}
+            </div>
+          </div>
+        )}
+
+        {posting.applicationMethod && (
+          <FieldBlock
+            label="応募経路"
+            value={`${posting.applicationMethod}${posting.applicationUrl ? `（${posting.applicationUrl}）` : ""}`}
+            editable={false}
+          />
+        )}
       </div>
 
     </div>

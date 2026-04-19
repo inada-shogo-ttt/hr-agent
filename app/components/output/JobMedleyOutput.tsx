@@ -108,7 +108,7 @@ function FieldBlock({
 
 export function JobMedleyOutput({ posting, thumbnailUrls, editable, onFieldChange, onThumbnailsChange, jobId }: JobMedleyOutputProps) {
   const copyAll = async () => {
-    const allText = `【訴求文タイトル】
+    const allText = `${posting.facilityType ? `【施設種別】\n${posting.facilityType}\n\n` : ""}【訴求文タイトル】
 ${posting.appealTitle}
 
 【訴求文】
@@ -130,7 +130,7 @@ ${posting.trainingSystem}
 ${posting.workingHours}
 
 【休日】
-${posting.holidays}
+${posting.holidays}${posting.longTermHolidays ? `\n長期休暇・特別休暇: ${posting.longTermHolidays}` : ""}
 
 【応募要件】
 ${posting.requirements}
@@ -142,7 +142,7 @@ ${posting.welcomeRequirements}
 ${posting.access}
 
 【選考プロセス】
-${posting.selectionProcess}`;
+${posting.selectionProcess}${posting.staffVoice ? `\n\n【職員の声】\n${posting.staffVoice}` : ""}${posting.workplaceAtmosphere ? `\n\n【職場の環境】\n${posting.workplaceAtmosphere}` : ""}${posting.hiringManagerName ? `\n\n【採用担当者】\n${posting.hiringManagerName}${posting.contactPhone ? ` / ${posting.contactPhone}` : ""}${posting.contactEmail ? ` / ${posting.contactEmail}` : ""}` : ""}`;
     await navigator.clipboard.writeText(allText);
   };
 
@@ -168,6 +168,9 @@ ${posting.selectionProcess}`;
       )}
 
       <div className="space-y-4">
+        {posting.facilityType && (
+          <FieldBlock label="施設種別" value={posting.facilityType} editable={editable} fieldKey="facilityType" onFieldChange={onFieldChange} />
+        )}
         <FieldBlock label="訴求文タイトル" value={posting.appealTitle} charLimit={30} editable={editable} fieldKey="appealTitle" onFieldChange={onFieldChange} />
         <FieldBlock label="訴求文" value={posting.appealText} charLimit={300} editable={editable} fieldKey="appealText" onFieldChange={onFieldChange} />
         <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={500} editable={editable} fieldKey="jobDescription" onFieldChange={onFieldChange} />
@@ -176,10 +179,29 @@ ${posting.selectionProcess}`;
         <FieldBlock label="教育体制・研修" value={posting.trainingSystem} editable={editable} fieldKey="trainingSystem" onFieldChange={onFieldChange} />
         <FieldBlock label="勤務時間・休憩時間" value={posting.workingHours} editable={editable} fieldKey="workingHours" onFieldChange={onFieldChange} />
         <FieldBlock label="休日" value={posting.holidays} editable={editable} fieldKey="holidays" onFieldChange={onFieldChange} />
+        {posting.longTermHolidays && (
+          <FieldBlock label="長期休暇・特別休暇" value={posting.longTermHolidays} editable={editable} fieldKey="longTermHolidays" onFieldChange={onFieldChange} />
+        )}
         <FieldBlock label="応募要件" value={posting.requirements} editable={editable} fieldKey="requirements" onFieldChange={onFieldChange} />
         <FieldBlock label="歓迎要件" value={posting.welcomeRequirements} editable={editable} fieldKey="welcomeRequirements" onFieldChange={onFieldChange} />
         <FieldBlock label="アクセス" value={posting.access} editable={editable} fieldKey="access" onFieldChange={onFieldChange} />
         <FieldBlock label="選考プロセス" value={posting.selectionProcess} editable={editable} fieldKey="selectionProcess" onFieldChange={onFieldChange} />
+        {posting.staffVoice && (
+          <FieldBlock label="職員の声" value={posting.staffVoice} editable={editable} fieldKey="staffVoice" onFieldChange={onFieldChange} />
+        )}
+        {posting.workplaceAtmosphere && (
+          <FieldBlock label="職場の環境" value={posting.workplaceAtmosphere} editable={editable} fieldKey="workplaceAtmosphere" onFieldChange={onFieldChange} />
+        )}
+        {(posting.hiringManagerName || posting.contactPhone || posting.contactEmail) && (
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-gray-700">採用担当者・連絡先</span>
+            <div className="bg-gray-50 border rounded-md p-3 text-sm space-y-1">
+              {posting.hiringManagerName && <div>担当者：{posting.hiringManagerName}</div>}
+              {posting.contactPhone && <div>電話：{posting.contactPhone}</div>}
+              {posting.contactEmail && <div>メール：{posting.contactEmail}</div>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

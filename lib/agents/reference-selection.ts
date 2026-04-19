@@ -5,7 +5,7 @@ import { extractJSON } from "./utils";
 export async function runReferenceSelectionAgent(
   input: ReferenceSelectionInput
 ): Promise<ReferenceSelectionOutput> {
-  const { trendAnalysis, jobPostingInput, userReferences } = input;
+  const { trendAnalysis, jobPostingInput, userReferences, sharedKnowledge } = input;
   const { common } = jobPostingInput;
 
   // ユーザー登録の成功原稿セクションを構築
@@ -27,9 +27,21 @@ ${refsText}
 `;
   }
 
+  // 共有ナレッジセクション
+  let sharedKnowledgeSection = "";
+  if (sharedKnowledge) {
+    sharedKnowledgeSection = `
+## 過去の成功パターン（実績ベース）
+以下は過去の掲載実績から抽出された、この職種・媒体で効果的なパターンです。
+ガイドライン作成時にこれらのパターンを積極的に反映してください。
+
+${sharedKnowledge}
+`;
+  }
+
   const prompt = `あなたは求人原稿の専門ライターです。
 以下の分析結果をもとに、原稿作成の参考になる優良事例を選定し、執筆ガイドラインを作成してください。
-${userReferencesSection}
+${userReferencesSection}${sharedKnowledgeSection}
 ## 求人基本情報
 業種: ${common.industry}
 職種: ${common.jobTitle}

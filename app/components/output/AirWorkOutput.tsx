@@ -111,10 +111,7 @@ export function AirWorkOutput({ posting, thumbnailUrls, editable, onFieldChange,
     const allText = `【職種名】
 ${posting.jobTitle}
 
-【キャッチコピー】
-${posting.catchphrase}
-
-【仕事内容】
+${posting.hpCatchphrase ? `【採用HP向けキャッチコピー】\n${posting.hpCatchphrase}\n\n` : ""}【仕事内容】
 ${posting.jobDescription}
 
 【勤務地】
@@ -127,10 +124,16 @@ ${posting.requirements}
 ${posting.numberOfHires}
 
 【給与】
-${posting.salary}
+${posting.salary}${posting.salaryDisplayType ? `（表示方法：${posting.salaryDisplayType}）` : ""}
 
-【勤務形態】
-${posting.workStyle}
+【試用・研修】
+${posting.trialPeriod}
+
+【応募受付方法】
+${posting.applicationReceiveMethod}
+
+【応募者から取得する情報】
+${posting.applicantInfoToGet}
 
 【休日・休暇】
 ${posting.holidays}
@@ -167,17 +170,68 @@ ${posting.selectionProcess}`;
 
       <div className="space-y-4">
         <FieldBlock label="職種名" value={posting.jobTitle} charLimit={30} editable={editable} fieldKey="jobTitle" onFieldChange={onFieldChange} />
-        <FieldBlock label="キャッチコピー" value={posting.catchphrase} charLimit={40} editable={editable} fieldKey="catchphrase" onFieldChange={onFieldChange} />
+        {posting.hpCatchphrase && (
+          <FieldBlock label="採用HP向けキャッチコピー" value={posting.hpCatchphrase} charLimit={40} editable={editable} fieldKey="hpCatchphrase" onFieldChange={onFieldChange} />
+        )}
         <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={600} editable={editable} fieldKey="jobDescription" onFieldChange={onFieldChange} />
         <FieldBlock label="勤務地" value={posting.location} editable={editable} fieldKey="location" onFieldChange={onFieldChange} />
         <FieldBlock label="求める人材" value={posting.requirements} charLimit={200} editable={editable} fieldKey="requirements" onFieldChange={onFieldChange} />
         <FieldBlock label="採用予定人数" value={posting.numberOfHires} editable={editable} fieldKey="numberOfHires" onFieldChange={onFieldChange} />
         <FieldBlock label="給与" value={posting.salary} editable={editable} fieldKey="salary" onFieldChange={onFieldChange} />
-        <FieldBlock label="勤務形態" value={posting.workStyle} editable={editable} fieldKey="workStyle" onFieldChange={onFieldChange} />
+        {posting.salaryDisplayType && (
+          <FieldBlock label="給与の表示方法" value={posting.salaryDisplayType} editable={false} />
+        )}
+        <FieldBlock label="試用・研修" value={posting.trialPeriod} editable={editable} fieldKey="trialPeriod" onFieldChange={onFieldChange} />
+        <FieldBlock label="応募受付方法" value={posting.applicationReceiveMethod} editable={editable} fieldKey="applicationReceiveMethod" onFieldChange={onFieldChange} />
+        <FieldBlock label="応募者から取得する情報" value={posting.applicantInfoToGet} editable={editable} fieldKey="applicantInfoToGet" onFieldChange={onFieldChange} />
+        {posting.workDays && posting.workDays.length > 0 && (
+          <FieldBlock label="勤務曜日" value={posting.workDays.join("、")} editable={false} />
+        )}
+        {posting.shiftPolicy && (
+          <FieldBlock label="シフトの決め方" value={posting.shiftPolicy} editable={editable} fieldKey="shiftPolicy" onFieldChange={onFieldChange} />
+        )}
+        {posting.workPeriod && (
+          <FieldBlock label="勤務期間" value={posting.workPeriod} editable={editable} fieldKey="workPeriod" onFieldChange={onFieldChange} />
+        )}
+        {posting.commuteAllowance && (
+          <FieldBlock label="交通費" value={posting.commuteAllowance} editable={editable} fieldKey="commuteAllowance" onFieldChange={onFieldChange} />
+        )}
         <FieldBlock label="休日・休暇" value={posting.holidays} editable={editable} fieldKey="holidays" onFieldChange={onFieldChange} />
         <FieldBlock label="社会保険" value={posting.socialInsurance} editable={editable} fieldKey="socialInsurance" onFieldChange={onFieldChange} />
         <FieldBlock label="福利厚生" value={posting.benefits} editable={editable} fieldKey="benefits" onFieldChange={onFieldChange} />
         <FieldBlock label="選考の流れ" value={posting.selectionProcess} editable={editable} fieldKey="selectionProcess" onFieldChange={onFieldChange} />
+        {posting.smokingPolicy && (
+          <FieldBlock label="受動喫煙対策" value={posting.smokingPolicy} editable={editable} fieldKey="smokingPolicy" onFieldChange={onFieldChange} />
+        )}
+
+        {posting.featureTags && posting.featureTags.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-gray-700">特徴タグ</span>
+            <div className="flex gap-2 flex-wrap">
+              {posting.featureTags.map((tag) => (
+                <span key={tag} className="text-xs px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {posting.shiftIncomeExample && (
+          <FieldBlock label="シフト・収入例" value={posting.shiftIncomeExample} editable={editable} fieldKey="shiftIncomeExample" onFieldChange={onFieldChange} />
+        )}
+        {posting.seniorStaffMessage && (
+          <FieldBlock label="先輩スタッフからの一言" value={posting.seniorStaffMessage} editable={editable} fieldKey="seniorStaffMessage" onFieldChange={onFieldChange} />
+        )}
+        {posting.workplaceAtmosphere && (
+          <FieldBlock label="職場の環境・雰囲気" value={posting.workplaceAtmosphere} editable={editable} fieldKey="workplaceAtmosphere" onFieldChange={onFieldChange} />
+        )}
+        {posting.applicationFlow && (
+          <FieldBlock label="応募の流れ" value={posting.applicationFlow} editable={editable} fieldKey="applicationFlow" onFieldChange={onFieldChange} />
+        )}
+        {posting.contactPhone && (
+          <FieldBlock label="問い合わせ電話番号" value={posting.contactPhone} editable={editable} fieldKey="contactPhone" onFieldChange={onFieldChange} />
+        )}
       </div>
     </div>
   );

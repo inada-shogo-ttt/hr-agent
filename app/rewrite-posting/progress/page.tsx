@@ -14,38 +14,26 @@ import { AgentStatus } from "@/lib/agents/types";
 import { saveThumbnails } from "@/lib/thumbnail-store";
 
 const AGENT_LABELS: Record<TeamBAgentId, string> = {
-  "tb-manager": "Manager Agent",
-  "tb-metrics-analysis": "数値分析 Agent",
-  "tb-manuscript-analysis": "原稿分析 Agent",
-  "tb-text-improvement": "テキスト改善 Agent",
+  "tb-text-improvement": "原稿改善 Agent",
   "tb-design-improvement": "デザイン改善 Agent",
   "tb-budget-optimization": "予算最適化 Agent",
 };
 
 const AGENT_DESCRIPTIONS: Record<TeamBAgentId, string> = {
-  "tb-manager": "既存原稿の確認・媒体特定",
-  "tb-metrics-analysis": "PV/CTR/応募率等の定量的課題抽出",
-  "tb-manuscript-analysis": "数値課題＋現原稿から定性的課題を特定",
-  "tb-text-improvement": "タイトル・キャッチコピー・本文のリライト",
+  "tb-text-improvement": "参考原稿・メトリクス・現行原稿を統合分析し、課題抽出からリライトまでを一気通貫で実施",
   "tb-design-improvement": "サムネイル画像の再生成",
   "tb-budget-optimization": "日額予算の推奨レンジ提案（Indeed専用）",
 };
 
 const AGENT_ORDER: TeamBAgentId[] = [
-  "tb-manager",
-  "tb-metrics-analysis",
-  "tb-manuscript-analysis",
   "tb-text-improvement",
   "tb-design-improvement",
   "tb-budget-optimization",
 ];
 
 const AGENT_WEIGHTS: Record<TeamBAgentId, number> = {
-  "tb-manager": 5,
-  "tb-metrics-analysis": 15,
-  "tb-manuscript-analysis": 20,
-  "tb-text-improvement": 35,
-  "tb-design-improvement": 15,
+  "tb-text-improvement": 70,
+  "tb-design-improvement": 20,
   "tb-budget-optimization": 10,
 };
 

@@ -3,11 +3,11 @@ import { BudgetOptimizationInput, BudgetOptimizationOutput } from "./types";
 import { extractJSON } from "@/lib/agents/utils";
 
 export async function runBudgetOptimizationAgent(input: BudgetOptimizationInput): Promise<BudgetOptimizationOutput> {
-  const { metrics, existingPosting, metricsAnalysis } = input;
+  const { metrics, existingPosting, metricsSummary } = input;
 
   const prompt = `あなたはIndeed求人広告の予算最適化の専門家です。
   応募数最大化を目的とし予算を選定してください。
-以下の数値データと分析結果に基づいて、最適な日額予算を推奨してください。
+以下の数値データに基づいて、最適な日額予算を推奨してください。
 
 ## 現在の数値
 日額予算: ${metrics.dailyBudget ?? "不明"}円
@@ -21,9 +21,7 @@ export async function runBudgetOptimizationAgent(input: BudgetOptimizationInput)
 ## 求人情報
 職種: ${existingPosting.jobTitle || "不明"}
 勤務地: ${existingPosting.location || "不明"}
-
-## 数値分析サマリー
-${metricsAnalysis.summary}
+${metricsSummary ? `\n## 数値分析サマリー（テキスト改善エージェント所見）\n${metricsSummary}` : ""}
 
 ## 予算最適化の考え方
 - 日額予算1000〜2,000円/日が一般的なレンジ

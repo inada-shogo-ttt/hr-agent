@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth-guard";
 import { createNotification } from "@/lib/notifications";
+import { extractKnowledge } from "@/lib/knowledge-extractor";
 
 export const runtime = "nodejs";
 
@@ -78,6 +79,11 @@ export async function POST(
       `${body.platform} の数値が${auth.user.name}さんによって登録されました`
     );
   }
+
+  // メトリクス登録をトリガーにナレッジ自動抽出（非同期・エラー無視）
+  extractKnowledge().catch((e) =>
+    console.warn("[metrics] ナレッジ自動抽出エラー（続行）:", e)
+  );
 
   return NextResponse.json(data, { status: 201 });
 }

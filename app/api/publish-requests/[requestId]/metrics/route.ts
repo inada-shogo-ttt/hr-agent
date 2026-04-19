@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth-guard";
 import { createNotification } from "@/lib/notifications";
+import { extractKnowledge } from "@/lib/knowledge-extractor";
 
 export const runtime = "nodejs";
 
@@ -110,6 +111,11 @@ export async function POST(
       `「${jobTitle}」の全媒体の掲載が終了しました。再掲載が可能です`
     );
   }
+
+  // メトリクス登録をトリガーにナレッジ自動抽出（非同期・エラー無視）
+  extractKnowledge().catch((e) =>
+    console.warn("[metrics] ナレッジ自動抽出エラー（続行）:", e)
+  );
 
   return NextResponse.json(metrics, { status: 201 });
 }

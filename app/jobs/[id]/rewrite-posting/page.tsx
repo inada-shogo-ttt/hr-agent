@@ -45,14 +45,22 @@ export default function JobRewritePostingPage() {
   const [thumbnailUrls, setThumbnailUrls] = useState<string[]>([]);
   const [publishMetrics, setPublishMetrics] = useState<PublishMetric[]>([]);
 
-  // 前回のTeam A出力を自動ロード
+  // 最新状態（Team A outputData + Team B improvedPosting をマージ済み）を自動ロード
   useEffect(() => {
     fetch(`/api/jobs/${jobId}/history-context`)
       .then((r) => r.json())
       .then((data) => {
         setHistoryCount(data.recordCount || 0);
 
-        if (data.latestThumbnailUrls?.length > 0) {
+        // サムネイル: 選択中 platform の最新状態を優先。無ければ後方互換の latestThumbnailUrls。
+        const merged = data.mergedOutput;
+        const platformThumbs =
+          merged?.platformThumbnails?.[initialPlatform] ||
+          merged?.[initialPlatform]?.thumbnailUrls ||
+          [];
+        if (platformThumbs.length > 0) {
+          setThumbnailUrls(platformThumbs);
+        } else if (data.latestThumbnailUrls?.length > 0) {
           setThumbnailUrls(data.latestThumbnailUrls);
         }
 
@@ -82,8 +90,9 @@ export default function JobRewritePostingPage() {
           }
         }
 
-        if (data.latestTeamAOutput) {
-          const output = data.latestTeamAOutput;
+        // 原稿フィールド: mergedOutput を優先、無ければ latestTeamAOutput（後方互換）
+        const output = data.mergedOutput || data.latestTeamAOutput;
+        if (output) {
           // Indeed出力から既存原稿フィールドに変換
           const indeed = output.indeed;
           const airwork = output.airwork;

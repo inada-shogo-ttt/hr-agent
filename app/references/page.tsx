@@ -21,8 +21,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, FileText, Trash2, MoreVertical } from "lucide-react";
+import { Plus, FileText, Trash2, MoreVertical, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface ReferencePosting {
   id: string;
@@ -42,6 +43,7 @@ const platformLabels: Record<string, string> = {
 };
 
 export default function ReferencesPage() {
+  const router = useRouter();
   const [references, setReferences] = useState<ReferencePosting[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<ReferencePosting | null>(null);
@@ -154,6 +156,16 @@ export default function ReferencesPage() {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              router.push(`/references/${ref.id}/edit`);
+                            }}
+                          >
+                            <Pencil className="w-4 h-4 mr-2" />
+                            編集
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-red-600 focus:text-red-600 focus:bg-red-50"
                             onClick={(e) => {

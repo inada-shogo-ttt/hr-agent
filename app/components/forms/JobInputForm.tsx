@@ -9,6 +9,7 @@ import { CommonFields } from "./CommonFields";
 import { IndeedFields } from "./IndeedFields";
 import { AirWorkFields } from "./AirWorkFields";
 import { JobMedleyFields } from "./JobMedleyFields";
+import { HelloWorkFields } from "./HelloWorkFields";
 import { SmartDefaultsSelector } from "./SmartDefaultsSelector";
 import { AIInputMode } from "./AIInputMode";
 import { JobPostingInput, CommonJobInfo } from "@/types/job-posting";
@@ -58,6 +59,7 @@ export function JobInputForm({ jobId }: JobInputFormProps) {
     indeed: {},
     airwork: {},
     jobmedley: {},
+    hellowork: {},
   });
 
   const updateCommon = (data: Partial<CommonJobInfo>) => {
@@ -150,11 +152,12 @@ export function JobInputForm({ jobId }: JobInputFormProps) {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="common">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="common">共通情報</TabsTrigger>
                   <TabsTrigger value="indeed">Indeed</TabsTrigger>
                   <TabsTrigger value="airwork">AirWork</TabsTrigger>
                   <TabsTrigger value="jobmedley">JobMedley</TabsTrigger>
+                  <TabsTrigger value="hellowork">ハローワーク</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="common" className="mt-6">
@@ -186,6 +189,18 @@ export function JobInputForm({ jobId }: JobInputFormProps) {
                       setFormData((prev) => ({
                         ...prev,
                         jobmedley: { ...prev.jobmedley, ...data },
+                      }))
+                    }
+                  />
+                </TabsContent>
+
+                <TabsContent value="hellowork" className="mt-6">
+                  <HelloWorkFields
+                    data={formData.hellowork || {}}
+                    onChange={(data) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        hellowork: { ...prev.hellowork, ...data },
                       }))
                     }
                   />

@@ -2,15 +2,12 @@
 
 import { ExistingPostingFields, IndeedMetrics, AirWorkMetrics, ImprovementDiff, IssueSummary, BudgetRecommendation } from "@/types/team-b";
 import { Platform } from "@/types/platform";
-import { AgentStatus } from "@/lib/agents/types";
 import { PlatformThumbnails } from "@/lib/nanobanana";
 import { ReferencePostingData } from "@/types/reference";
 
 // Team B エージェント識別子
+// 旧: tb-manager / tb-metrics-analysis / tb-manuscript-analysis は tb-text-improvement に統合済み
 export type TeamBAgentId =
-  | "tb-manager"
-  | "tb-metrics-analysis"
-  | "tb-manuscript-analysis"
   | "tb-text-improvement"
   | "tb-design-improvement"
   | "tb-budget-optimization";
@@ -24,68 +21,27 @@ export interface TeamBSSEEvent {
   timestamp: string;
 }
 
-// Manager Agent
-export interface TeamBManagerInput {
-  platform: Platform;
-  existingPosting: ExistingPostingFields;
-  hasMetrics: boolean;
-}
-
-export interface TeamBManagerOutput {
-  confirmedPlatform: Platform;
-  summary: string;
-  postingQuality: "good" | "average" | "poor";
-  initialObservations: string[];
-}
-
-// 数値分析 Agent
-export interface MetricsAnalysisInput {
-  platform: Platform;
-  metrics: IndeedMetrics | AirWorkMetrics;
-  existingPosting: ExistingPostingFields;
-  historyContext?: unknown[];
-  crossJobMemory?: string;
-}
-
-export interface MetricsAnalysisOutput {
-  summary: string;
-  issues: IssueSummary[];
-  benchmarks: {
-    metric: string;
-    current: string;
-    benchmark: string;
-    status: "above" | "below" | "average";
-  }[];
-}
-
-// 原稿分析 Agent
-export interface ManuscriptAnalysisInput {
-  platform: Platform;
-  existingPosting: ExistingPostingFields;
-  metricsAnalysis?: string;
-  metricsIssues?: IssueSummary[];
-  historyContext?: unknown[];
-  crossJobMemory?: string;
-}
-
-export interface ManuscriptAnalysisOutput {
-  overallAssessment: string;
-  issues: IssueSummary[];
-  improvementPriorities: string[];
-}
-
-// テキスト改善 Agent
+// 統合テキスト改善 Agent（旧 Manager + MetricsAnalysis + ManuscriptAnalysis + TextImprovement）
 export interface TextImprovementInput {
   platform: Platform;
   existingPosting: ExistingPostingFields;
-  manuscriptAnalysis: ManuscriptAnalysisOutput;
-  metricsIssues?: IssueSummary[];
+  metrics?: IndeedMetrics | AirWorkMetrics;
+  previousMetrics?: Record<string, number> | null;
   userReferences?: ReferencePostingData[];
+  historyContext?: unknown[];
   crossJobMemory?: string;
+  sharedKnowledge?: string;
 }
 
 export interface TextImprovementOutput {
-  improvedPosting: ExistingPostingFields;
+  // メトリクスありのときのみ。数値の総合所見（ベンチマーク比較込み）
+  metricsSummary?: string;
+  // 原稿の定性的な総合評価
+  overallAssessment: string;
+  // 課題リスト（数値・原稿を統合）
+  issues: IssueSummary[];
+  // 変更したフィールドのみ
+  improvedPosting: Partial<ExistingPostingFields>;
   improvements: ImprovementDiff[];
 }
 
@@ -109,11 +65,12 @@ export interface DesignImprovementOutput {
   message: string;
 }
 
-// 予算最適化 Agent
+// 予算最適化 Agent（Indeed専用）
 export interface BudgetOptimizationInput {
   metrics: IndeedMetrics;
   existingPosting: ExistingPostingFields;
-  metricsAnalysis: MetricsAnalysisOutput;
+  // text-improvement が出す総合所見（参考情報として使用）
+  metricsSummary?: string;
 }
 
 export interface BudgetOptimizationOutput {

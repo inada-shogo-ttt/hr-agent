@@ -99,6 +99,7 @@ export interface ReferenceSelectionInput {
   trendAnalysis: TrendAnalysisOutput;
   jobPostingInput: JobPostingInput;
   userReferences?: ReferencePostingData[];
+  sharedKnowledge?: string;
 }
 
 export interface ReferenceExample {
@@ -123,6 +124,7 @@ export interface ManuscriptWritingInput {
   trendAnalysis: TrendAnalysisOutput;
   referenceSelection: ReferenceSelectionOutput;
   userReferences?: ReferencePostingData[];
+  sharedKnowledge?: string;
 }
 
 export interface ManuscriptWritingOutput {
@@ -158,8 +160,12 @@ export interface ManuscriptWritingOutput {
     selectionProcess: string;
   };
   hellowork: {
-    jobTitle: string;
-    jobDescription: string;
+    jobTitle: string;                   // 全角28字以内
+    jobDescription: string;             // 全角360字以内
+    // 2024年法改正対応（必須）
+    workplaceChange: string;
+    jobContentChange: string;
+    transferPossibility: string;
     employmentPeriod: string;
     contractRenewal: string;
     wageAmount: string;
@@ -167,19 +173,27 @@ export interface ManuscriptWritingOutput {
     commutingAllowance: string;
     bonus: string;
     raise: string;
+    salaryClosingDay: string;
+    salaryPayDay: string;
     workingHours: string;
     overtime: string;
     breakTime: string;
     holidays: string;
+    annualHolidays: string;
     annualLeave: string;
     insurance: string;
     pension: string;
     trialPeriod: string;
+    retirementAge: string;
+    retirementBenefit: string;
     specialNotes: string;
     requirements: string;
     requiredLicenses: string;
     selectionMethod: string;
+    selectionResultDays: string;
     applicationDocuments: string;
+    applicationMethodHw: string;
+    hiringManagerContact: string;
     remarks: string;
   };
 }

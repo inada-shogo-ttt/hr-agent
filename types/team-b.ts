@@ -113,6 +113,21 @@ export interface ExistingPostingFields {
   selectionNotification?: string;
   remarks?: string;
 
+  // 新規対応フィールド（Team A の入力項目と整合）
+  fixedOvertimePay?: string;
+  monthlyWorkingHours?: string;
+  featureTags?: string;            // カンマ区切り文字列として格納
+  shiftIncomeExample?: string;
+  seniorStaffMessage?: string;
+  workplaceAtmosphere?: string;
+  applicationFlow?: string;
+  staffVoice?: string;
+  representativeName?: string;
+  establishmentYear?: string;
+  capital?: string;
+  businessContent?: string;
+  companyFeatures?: string;
+
   // サムネイル要望
   thumbnailRequirements?: string;
 }

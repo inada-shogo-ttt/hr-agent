@@ -1,15 +1,13 @@
 import { NextRequest } from "next/server";
-import { runTeamBManagerAgent } from "@/lib/agents/team-b/manager";
-import { runMetricsAnalysisAgent } from "@/lib/agents/team-b/metrics-analysis";
-import { runManuscriptAnalysisAgent } from "@/lib/agents/team-b/manuscript-analysis";
 import { runTextImprovementAgent } from "@/lib/agents/team-b/text-improvement";
 import { runDesignImprovementAgent } from "@/lib/agents/team-b/design-improvement";
 import { runBudgetOptimizationAgent } from "@/lib/agents/team-b/budget-optimization";
-import { TeamBInput, TeamBOutput, IndeedMetrics } from "@/types/team-b";
+import { TeamBInput, TeamBOutput, IndeedMetrics, ExistingPostingFields } from "@/types/team-b";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { ReferencePostingData } from "@/types/reference";
 import { supabase } from "@/lib/supabase";
 import { getFormattedMemories, saveMemories, updateEffectiveness } from "@/lib/agents/team-b/memory";
+import { getFormattedKnowledge } from "@/lib/shared-knowledge";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -79,16 +77,33 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        // DB から参考原稿を取得
+        // DB から参考原稿を取得（職種・業種でスマートマッチング）
         let userReferences: ReferencePostingData[] = [];
         try {
-          const { data: refs } = await supabase
+          let query = supabase
             .from("ReferencePosting")
             .select("*")
-            .order("createdAt", { ascending: false })
-            .limit(5);
-          if (!refs) throw new Error("参考原稿の取得に失敗");
-          userReferences = refs.map((r) => ({
+            .order("createdAt", { ascending: false });
+
+          if (input.jobType) query = query.ilike("jobType", `%${input.jobType}%`);
+          if (input.industry) query = query.ilike("industry", `%${input.industry}%`);
+          query = query.limit(5);
+
+          const { data: refs } = await query;
+          let allRefs = refs || [];
+
+          if (allRefs.length < 3) {
+            const { data: fallbackRefs } = await supabase
+              .from("ReferencePosting")
+              .select("*")
+              .order("createdAt", { ascending: false })
+              .limit(5);
+            const existingIds = new Set(allRefs.map((r) => r.id));
+            const additional = (fallbackRefs || []).filter((r) => !existingIds.has(r.id));
+            allRefs = [...allRefs, ...additional].slice(0, 5);
+          }
+
+          userReferences = allRefs.map((r) => ({
             id: r.id,
             title: r.title,
             platform: r.platform,
@@ -118,7 +133,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // クロスジョブメモリを取得（deep-agents-memory: StoreBackend相当）
+        // クロスジョブメモリ
         let crossJobMemory = "";
         try {
           crossJobMemory = await getFormattedMemories({
@@ -133,7 +148,22 @@ export async function POST(request: NextRequest) {
           console.warn("[team-b] クロスジョブメモリの取得に失敗:", e);
         }
 
-        // 前回のメトリクスを取得（効果フィードバック用）
+        // 共有ナレッジ
+        let sharedKnowledgeText = "";
+        try {
+          const category = input.jobType || detectedIndustry || "";
+          sharedKnowledgeText = await getFormattedKnowledge({
+            category,
+            platform: input.platform,
+          });
+          if (sharedKnowledgeText) {
+            console.log(`[team-b] 共有ナレッジをロードしました`);
+          }
+        } catch (e) {
+          console.warn("[team-b] 共有ナレッジの取得に失敗:", e);
+        }
+
+        // 前回のメトリクス（効果フィードバック用）
         let previousMetrics: Record<string, number> | null = null;
         if (historyContext && historyContext.length > 0) {
           const prevTeamB = [...historyContext]
@@ -149,63 +179,12 @@ export async function POST(request: NextRequest) {
         const isHelloWork = input.platform === "hellowork";
         const hasMetrics = !isJobMedley && !isHelloWork && !!input.metrics;
 
-        // Step 1: Manager Agent
-        startAgent("tb-manager", "既存原稿の確認・媒体特定を開始します");
-        const managerOutput = await runTeamBManagerAgent({
-          platform: input.platform,
-          existingPosting: input.existingPosting,
-          hasMetrics,
-        });
-        completeAgent("tb-manager", "要件確認完了", {
-          summary: managerOutput.summary,
-          quality: managerOutput.postingQuality,
-        });
-
-        // Step 2: 数値分析（JobMedley以外 & メトリクスあり）
-        let metricsAnalysisResult: Awaited<ReturnType<typeof runMetricsAnalysisAgent>> | undefined;
-        if (hasMetrics && input.metrics) {
-          startAgent("tb-metrics-analysis", "掲載数値の分析を開始します");
-          metricsAnalysisResult = await runMetricsAnalysisAgent({
-            platform: input.platform,
-            metrics: input.metrics,
-            existingPosting: input.existingPosting,
-            historyContext: historyContext,
-            crossJobMemory,
-          });
-          completeAgent("tb-metrics-analysis", "数値分析完了", {
-            summary: metricsAnalysisResult.summary,
-            issueCount: metricsAnalysisResult.issues.length,
-          });
-        } else {
-          completeAgent("tb-metrics-analysis", isJobMedley ? "JobMedleyは数値分析スキップ" : isHelloWork ? "ハローワークは数値分析スキップ" : "数値データなし・スキップ");
-        }
-
-        // Step 3: 原稿分析
-        startAgent("tb-manuscript-analysis", "原稿の定性分析を開始します");
-        const manuscriptAnalysis = await runManuscriptAnalysisAgent({
-          platform: input.platform,
-          existingPosting: input.existingPosting,
-          metricsAnalysis: metricsAnalysisResult?.summary,
-          metricsIssues: metricsAnalysisResult?.issues,
-          historyContext: historyContext,
-          crossJobMemory,
-        });
-        completeAgent("tb-manuscript-analysis", "原稿分析完了", {
-          assessment: manuscriptAnalysis.overallAssessment,
-          issueCount: manuscriptAnalysis.issues.length,
-        });
-
-        // Step 4, 5, 6: テキスト改善 + デザイン改善 + 予算最適化（並列）
-        startAgent("tb-text-improvement", "原稿のリライトを開始します");
+        // 統合エージェント + デザイン + 予算を並列実行
+        startAgent("tb-text-improvement", "参考原稿・メトリクス・現行原稿を統合分析し、リライト案を生成します");
         startAgent("tb-design-improvement", "改善サムネイルの生成を開始します");
-        if (isIndeed && metricsAnalysisResult) {
+        if (isIndeed && hasMetrics) {
           startAgent("tb-budget-optimization", "予算最適化の分析を開始します");
         }
-
-        const allIssues = [
-          ...(metricsAnalysisResult?.issues || []),
-          ...manuscriptAnalysis.issues,
-        ];
 
         const parallelTasks: [
           Promise<Awaited<ReturnType<typeof runTextImprovementAgent>>>,
@@ -215,30 +194,36 @@ export async function POST(request: NextRequest) {
           runTextImprovementAgent({
             platform: input.platform,
             existingPosting: input.existingPosting,
-            manuscriptAnalysis,
-            metricsIssues: metricsAnalysisResult?.issues,
+            metrics: hasMetrics ? input.metrics : undefined,
+            previousMetrics,
             userReferences: userReferences.length > 0 ? userReferences : undefined,
+            historyContext,
             crossJobMemory,
+            sharedKnowledge: sharedKnowledgeText || undefined,
           }),
           runDesignImprovementAgent({
             platform: input.platform,
             existingPosting: input.existingPosting,
             improvedPosting: input.existingPosting,
-            historyContext: historyContext,
+            historyContext,
             visualStyle,
           }),
-          isIndeed && metricsAnalysisResult && input.metrics
+          isIndeed && hasMetrics && input.metrics
             ? runBudgetOptimizationAgent({
                 metrics: input.metrics as IndeedMetrics,
                 existingPosting: input.existingPosting,
-                metricsAnalysis: metricsAnalysisResult,
               })
             : Promise.resolve(null),
         ];
 
         const [textResult, designResult, budgetResult] = await Promise.all(parallelTasks);
 
-        completeAgent("tb-text-improvement", `リライト完了（${textResult.improvements.length}箇所改善）`);
+        completeAgent("tb-text-improvement", `分析・リライト完了（${textResult.improvements.length}箇所改善 / 課題${textResult.issues.length}件検出）`, {
+          assessment: textResult.overallAssessment,
+          metricsSummary: textResult.metricsSummary,
+          issueCount: textResult.issues.length,
+        });
+
         const platformThumbnails = designResult.platformThumbnails;
         completeAgent("tb-design-improvement", designResult.message, {
           thumbnailCount: designResult.thumbnailUrls.length,
@@ -250,6 +235,8 @@ export async function POST(request: NextRequest) {
           });
         } else if (!isIndeed) {
           completeAgent("tb-budget-optimization", "Indeed以外のため予算分析スキップ");
+        } else if (!hasMetrics) {
+          completeAgent("tb-budget-optimization", "メトリクスなしのため予算分析スキップ");
         }
 
         // クロスジョブメモリに学習パターンを保存（非同期・エラー無視）
@@ -257,19 +244,18 @@ export async function POST(request: NextRequest) {
           await saveMemories({
             platform: input.platform,
             improvements: textResult.improvements,
-            issues: allIssues,
+            issues: textResult.issues,
             sourceJobId: input.jobId,
             industry: detectedIndustry || undefined,
             jobType: input.jobType,
           });
 
-          // 前回メトリクスがある場合、効果フィードバックを実行
           if (previousMetrics && input.metrics) {
             const currentMetrics = input.metrics as Record<string, number>;
             const prevCTR = previousMetrics.ctr || 0;
             const currCTR = currentMetrics.ctr || 0;
             const improved = currCTR > prevCTR;
-            const categories = allIssues.map((i) => i.category);
+            const categories = textResult.issues.map((i) => i.category);
             if (categories.length > 0) {
               await updateEffectiveness(input.platform, categories, improved);
             }
@@ -278,14 +264,14 @@ export async function POST(request: NextRequest) {
           console.warn("[team-b] メモリ保存エラー（続行）:", e);
         }
 
-        // 最終出力を組み立て
+        // 最終出力を組み立て（TeamBOutput 形状は従来互換）
         const finalOutput: TeamBOutput = {
           platform: input.platform,
-          issuesSummary: allIssues,
-          metricsAnalysis: metricsAnalysisResult?.summary,
-          manuscriptAnalysis: manuscriptAnalysis.overallAssessment,
+          issuesSummary: textResult.issues,
+          metricsAnalysis: textResult.metricsSummary,
+          manuscriptAnalysis: textResult.overallAssessment,
           improvements: textResult.improvements,
-          improvedPosting: textResult.improvedPosting,
+          improvedPosting: textResult.improvedPosting as ExistingPostingFields,
           thumbnailUrls: designResult.thumbnailUrls,
           platformThumbnails,
           budgetRecommendation: budgetResult?.recommendation,
@@ -294,7 +280,7 @@ export async function POST(request: NextRequest) {
 
         sendEvent(controller, {
           type: "workflow_complete",
-          agentId: "tb-manager",
+          agentId: "tb-text-improvement",
           message: "原稿改善が完了しました",
           data: finalOutput,
           timestamp: now(),
@@ -303,7 +289,7 @@ export async function POST(request: NextRequest) {
         console.error("[team-b] Workflow error:", error);
         sendEvent(controller, {
           type: "workflow_error",
-          agentId: "tb-manager",
+          agentId: "tb-text-improvement",
           message: error instanceof Error ? error.message : "ワークフロー実行中にエラーが発生しました",
           timestamp: now(),
         });

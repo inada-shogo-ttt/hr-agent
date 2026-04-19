@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CommonJobInfo, EmploymentType, Prefecture } from "@/types/job-posting";
+import { CommonJobInfo, EmploymentType, Prefecture, SmokingPolicy, SalaryDisplayType, HiringManagerInfo } from "@/types/job-posting";
 
 const EMPLOYMENT_TYPES: EmploymentType[] = [
   "正社員",
@@ -39,6 +39,15 @@ const SOCIAL_INSURANCE_OPTIONS = [
   "厚生年金",
 ];
 
+const SMOKING_POLICIES: SmokingPolicy[] = [
+  "屋内全面禁煙",
+  "屋内禁煙（喫煙専用室あり）",
+  "屋内禁煙（加熱式たばこ専用室あり）",
+  "屋内禁煙（喫煙可能室あり）",
+  "喫煙可",
+  "対策なし",
+];
+
 interface CommonFieldsProps {
   data: CommonJobInfo;
   onChange: (data: Partial<CommonJobInfo>) => void;
@@ -51,6 +60,16 @@ export function CommonFields({ data, onChange }: CommonFieldsProps) {
       ? [...current, option]
       : current.filter((s) => s !== option);
     onChange({ socialInsurance: updated });
+  };
+
+  const fixedOvertime = data.fixedOvertimePay || { hasFixed: false };
+  const updateFixedOvertime = (patch: Partial<typeof fixedOvertime>) => {
+    onChange({ fixedOvertimePay: { ...fixedOvertime, ...patch } });
+  };
+
+  const hiringManager: HiringManagerInfo = data.hiringManager || {};
+  const updateHiringManager = (patch: Partial<HiringManagerInfo>) => {
+    onChange({ hiringManager: { ...hiringManager, ...patch } });
   };
 
   return (
@@ -84,6 +103,32 @@ export function CommonFields({ data, onChange }: CommonFieldsProps) {
             />
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="space-y-2">
+            <Label htmlFor="companyNameKana">
+              会社名（カナ）
+              <span className="text-xs font-normal text-muted-foreground ml-2">※ハローワーク必須</span>
+            </Label>
+            <Input
+              id="companyNameKana"
+              value={data.companyNameKana || ""}
+              onChange={(e) => onChange({ companyNameKana: e.target.value })}
+              placeholder="カブシキガイシャ〇〇"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="postalCode">
+              郵便番号
+              <span className="text-xs font-normal text-muted-foreground ml-2">※Indeed/ハローワーク必須</span>
+            </Label>
+            <Input
+              id="postalCode"
+              value={data.postalCode || ""}
+              onChange={(e) => onChange({ postalCode: e.target.value })}
+              placeholder="150-0001"
+            />
+          </div>
+        </div>
         <div className="mt-4 space-y-2">
           <Label htmlFor="companyDescription">会社の説明（任意）</Label>
           <Textarea
@@ -93,6 +138,53 @@ export function CommonFields({ data, onChange }: CommonFieldsProps) {
             placeholder="会社の特徴・強みなど"
             rows={3}
           />
+        </div>
+      </div>
+
+      {/* 採用担当者（Indeed/ハローワーク必須） */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">
+          採用担当者
+          <span className="text-xs font-normal text-muted-foreground ml-2">※Indeed/ハローワーク必須</span>
+        </h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="hm-name">担当者名</Label>
+            <Input
+              id="hm-name"
+              value={hiringManager.name || ""}
+              onChange={(e) => updateHiringManager({ name: e.target.value })}
+              placeholder="山田 太郎"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="hm-position">役職</Label>
+            <Input
+              id="hm-position"
+              value={hiringManager.position || ""}
+              onChange={(e) => updateHiringManager({ position: e.target.value })}
+              placeholder="人事部 採用担当"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="hm-phone">電話番号</Label>
+            <Input
+              id="hm-phone"
+              value={hiringManager.phone || ""}
+              onChange={(e) => updateHiringManager({ phone: e.target.value })}
+              placeholder="03-0000-0000"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="hm-email">メールアドレス</Label>
+            <Input
+              id="hm-email"
+              type="email"
+              value={hiringManager.email || ""}
+              onChange={(e) => updateHiringManager({ email: e.target.value })}
+              placeholder="recruit@example.com"
+            />
+          </div>
         </div>
       </div>
 
@@ -265,6 +357,27 @@ export function CommonFields({ data, onChange }: CommonFieldsProps) {
           </div>
         </div>
         <div className="mt-4 space-y-2">
+          <Label htmlFor="salaryDisplayType">
+            給与の表示方法
+            <span className="text-xs font-normal text-muted-foreground ml-2">※Indeed/Airワーク必須</span>
+          </Label>
+          <Select
+            value={data.salaryDisplayType || ""}
+            onValueChange={(v) => onChange({ salaryDisplayType: v as SalaryDisplayType })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="選択してください" />
+            </SelectTrigger>
+            <SelectContent>
+              {["範囲表示", "下限表示", "固定額表示"].map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="mt-4 space-y-2">
           <Label htmlFor="salaryDescription">給与補足（任意）</Label>
           <Input
             id="salaryDescription"
@@ -272,6 +385,63 @@ export function CommonFields({ data, onChange }: CommonFieldsProps) {
             onChange={(e) => onChange({ salaryDescription: e.target.value })}
             placeholder="昇給あり、各種手当含む など"
           />
+        </div>
+
+        {/* 固定残業代（Indeed必須） */}
+        <div className="mt-6 border-t pt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="hasFixedOvertime"
+              checked={fixedOvertime.hasFixed}
+              onChange={(e) => updateFixedOvertime({ hasFixed: e.target.checked })}
+              className="w-4 h-4"
+            />
+            <Label htmlFor="hasFixedOvertime" className="cursor-pointer">
+              固定残業代あり（Indeedでは有無の明示が必須）
+            </Label>
+          </div>
+          {fixedOvertime.hasFixed && (
+            <div className="grid grid-cols-2 gap-4 pl-6">
+              <div className="space-y-2">
+                <Label htmlFor="fixedOvertimeAmount">
+                  金額（円） <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="fixedOvertimeAmount"
+                  type="number"
+                  value={fixedOvertime.amount ?? ""}
+                  onChange={(e) =>
+                    updateFixedOvertime({ amount: parseInt(e.target.value) || undefined })
+                  }
+                  placeholder="30000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fixedOvertimeHours">
+                  みなし時間（時間/月） <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="fixedOvertimeHours"
+                  type="number"
+                  value={fixedOvertime.hours ?? ""}
+                  onChange={(e) =>
+                    updateFixedOvertime({ hours: parseInt(e.target.value) || undefined })
+                  }
+                  placeholder="30"
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="fixedOvertimeNote">備考</Label>
+                <Input
+                  id="fixedOvertimeNote"
+                  value={fixedOvertime.note || ""}
+                  onChange={(e) => updateFixedOvertime({ note: e.target.value })}
+                  placeholder="超過分は別途支給 など"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -299,6 +469,24 @@ export function CommonFields({ data, onChange }: CommonFieldsProps) {
               onChange={(e) => onChange({ workingHoursDescription: e.target.value })}
               placeholder="シフト制、フレックスタイム制 など"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="monthlyWorkingHours">
+              月間平均所定労働時間（時間/月）
+              <span className="text-xs text-muted-foreground ml-2">※Indeed必須</span>
+            </Label>
+            <Input
+              id="monthlyWorkingHours"
+              type="number"
+              value={data.monthlyWorkingHours ?? ""}
+              onChange={(e) =>
+                onChange({ monthlyWorkingHours: parseInt(e.target.value) || undefined })
+              }
+              placeholder="例: 160"
+            />
+            <p className="text-xs text-muted-foreground">
+              日×週×月で概算可（例：8h×5日×4週=160h）。1時間未満は四捨五入。
+            </p>
           </div>
         </div>
       </div>
@@ -402,6 +590,31 @@ export function CommonFields({ data, onChange }: CommonFieldsProps) {
               <span>{option}</span>
             </label>
           ))}
+        </div>
+      </div>
+
+      {/* 受動喫煙対策（全媒体共通・Indeed/ハローワーク必須） */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">
+          受動喫煙対策
+          <span className="text-xs font-normal text-muted-foreground ml-2">※Indeed/ハローワーク必須</span>
+        </h3>
+        <div className="space-y-2">
+          <Select
+            value={data.smokingPolicy || ""}
+            onValueChange={(v) => onChange({ smokingPolicy: v as SmokingPolicy })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="選択してください" />
+            </SelectTrigger>
+            <SelectContent>
+              {SMOKING_POLICIES.map((policy) => (
+                <SelectItem key={policy} value={policy}>
+                  {policy}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
