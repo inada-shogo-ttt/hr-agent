@@ -17,11 +17,8 @@ import {
   ChevronRight,
   LogOut,
   Settings,
-  Upload,
-  User,
 } from "lucide-react";
 import { useUser } from "@/app/providers/auth-provider";
-import { NotificationBell } from "@/app/components/NotificationBell";
 import { UserRole } from "@/types/auth";
 
 interface Breadcrumb {
@@ -40,7 +37,6 @@ function getBreadcrumbs(pathname: string): Breadcrumb[] {
   if (pathname === "/" || pathname === "") return [];
   if (pathname === "/jobs") return [];
   if (pathname === "/references") return [];
-  if (pathname === "/publish") return [];
   if (pathname.startsWith("/settings")) return [];
 
   if (pathname === "/references/new") {
@@ -57,11 +53,6 @@ function getBreadcrumbs(pathname: string): Breadcrumb[] {
     return [{ label: "求人管理", href: "/jobs" }];
   }
 
-  const publishDetailMatch = pathname.match(/^\/publish\/([^/]+)$/);
-  if (publishDetailMatch) {
-    return [{ label: "掲載管理", href: "/publish" }, { label: "依頼詳細", href: pathname }];
-  }
-
   const jobSubMatch = pathname.match(
     /^\/jobs\/([^/]+)\/(new-posting|rewrite-posting)$/
   );
@@ -72,7 +63,7 @@ function getBreadcrumbs(pathname: string): Breadcrumb[] {
       { label: "求人一覧", href: "/jobs" },
       { label: "求人詳細", href: `/jobs/${jobId}` },
       {
-        label: isTeamA ? "Team A 入力" : "Team B 入力",
+        label: isTeamA ? "原稿作成" : "ブラッシュアップ",
         href: pathname,
       },
     ];
@@ -88,7 +79,7 @@ function getBreadcrumbs(pathname: string): Breadcrumb[] {
       { label: "求人一覧", href: "/jobs" },
       { label: "求人詳細", href: `/jobs/${jobId}` },
       {
-        label: isTeamA ? "Team A 実行中" : "Team B 実行中",
+        label: isTeamA ? "原稿作成 実行中" : "ブラッシュアップ 実行中",
         href: pathname,
       },
     ];
@@ -104,7 +95,7 @@ function getBreadcrumbs(pathname: string): Breadcrumb[] {
       { label: "求人一覧", href: "/jobs" },
       { label: "求人詳細", href: `/jobs/${jobId}` },
       {
-        label: isTeamA ? "Team A 出力" : "Team B 出力",
+        label: isTeamA ? "生成結果" : "改善結果",
         href: pathname,
       },
     ];
@@ -128,8 +119,6 @@ export function AppHeader() {
 
   const isJobsActive = pathname.startsWith("/jobs");
   const isReferencesActive = pathname.startsWith("/references");
-  const isPublishActive = pathname.startsWith("/publish");
-  const isSettingsActive = pathname.startsWith("/settings");
 
   async function handleSignOut() {
     await signOut();
@@ -182,55 +171,33 @@ export function AppHeader() {
         </div>
 
         <nav className="flex items-center gap-2 shrink-0">
-          {/* ロール別ナビゲーション */}
-          {user?.role === "publisher" ? (
-            <Link href="/publish">
-              <Button
-                size="sm"
-                className={`text-[13px] h-8 px-4 rounded-lg ${
-                  isPublishActive
-                    ? "bg-gray-900 hover:bg-gray-800"
-                    : "bg-gray-700 hover:bg-gray-800"
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5 mr-1.5" />
-                掲載管理
-              </Button>
-            </Link>
-          ) : (
-            <>
-              <Link href="/references">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`text-[13px] h-8 px-3 ${
-                    isReferencesActive
-                      ? "text-gray-900 font-semibold bg-gray-100"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5 mr-1.5" />
-                  参考原稿
-                </Button>
-              </Link>
-              <Link href="/jobs">
-                <Button
-                  size="sm"
-                  className={`text-[13px] h-8 px-4 rounded-lg ${
-                    isJobsActive
-                      ? "bg-gray-900 hover:bg-gray-800"
-                      : "bg-gray-700 hover:bg-gray-800"
-                  }`}
-                >
-                  <Briefcase className="w-3.5 h-3.5 mr-1.5" />
-                  求人管理
-                </Button>
-              </Link>
-            </>
-          )}
-
-          {/* 通知ベル */}
-          {user && <NotificationBell />}
+          <Link href="/references">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`text-[13px] h-8 px-3 ${
+                isReferencesActive
+                  ? "text-gray-900 font-semibold bg-gray-100"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 mr-1.5" />
+              参考原稿
+            </Button>
+          </Link>
+          <Link href="/jobs">
+            <Button
+              size="sm"
+              className={`text-[13px] h-8 px-4 rounded-lg ${
+                isJobsActive
+                  ? "bg-gray-900 hover:bg-gray-800"
+                  : "bg-gray-700 hover:bg-gray-800"
+              }`}
+            >
+              <Briefcase className="w-3.5 h-3.5 mr-1.5" />
+              求人管理
+            </Button>
+          </Link>
 
           {/* ユーザーメニュー */}
           {user && (

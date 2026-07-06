@@ -47,19 +47,21 @@ const defaultCommonInfo: CommonJobInfo = {
 };
 
 interface JobInputFormProps {
-  jobId?: string;
+  jobId: string;
+  /** 既存求人の流用時に渡す初期値。渡すとフォーム入力モードで開き、内容を反映する */
+  initialData?: JobPostingInput;
 }
 
-export function JobInputForm({ jobId }: JobInputFormProps) {
+export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [inputMode, setInputMode] = useState<"ai" | "manual">("ai");
+  const [inputMode, setInputMode] = useState<"ai" | "manual">(initialData ? "manual" : "ai");
   const [formData, setFormData] = useState<JobPostingInput>({
-    common: defaultCommonInfo,
-    indeed: {},
-    airwork: {},
-    jobmedley: {},
-    hellowork: {},
+    common: { ...defaultCommonInfo, ...initialData?.common },
+    indeed: initialData?.indeed || {},
+    airwork: initialData?.airwork || {},
+    jobmedley: initialData?.jobmedley || {},
+    hellowork: initialData?.hellowork || {},
   });
 
   const updateCommon = (data: Partial<CommonJobInfo>) => {
@@ -76,7 +78,7 @@ export function JobInputForm({ jobId }: JobInputFormProps) {
       common: { ...formData.common, ...data },
     };
     sessionStorage.setItem("jobPostingInput", JSON.stringify(merged));
-    router.push(jobId ? `/jobs/${jobId}/new-posting/progress` : "/new-posting/progress");
+    router.push(`/jobs/${jobId}/new-posting/progress`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,7 +89,7 @@ export function JobInputForm({ jobId }: JobInputFormProps) {
     sessionStorage.setItem("jobPostingInput", JSON.stringify(formData));
 
     // 進捗ページへ遷移
-    router.push(jobId ? `/jobs/${jobId}/new-posting/progress` : "/new-posting/progress");
+    router.push(`/jobs/${jobId}/new-posting/progress`);
   };
 
   return (

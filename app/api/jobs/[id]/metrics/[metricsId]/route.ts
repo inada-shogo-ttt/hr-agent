@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth-guard";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const runtime = "nodejs";
 
@@ -8,7 +8,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; metricsId: string }> }
 ) {
-  const auth = await requireRole(["admin", "publisher"]);
+  const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
   const { metricsId } = await params;
@@ -35,7 +35,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; metricsId: string }> }
 ) {
-  const auth = await requireRole(["admin", "publisher"]);
+  const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
   const { metricsId } = await params;

@@ -196,9 +196,9 @@ export default function JobRewritePostingPage() {
   return (
     <main className="min-h-screen bg-[#FAFAF8]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-2">再掲載用原稿改善</h1>
+        <h1 className="text-2xl font-bold mb-2">求人ブラッシュアップ</h1>
         <p className="text-muted-foreground mb-4">
-          AIが既存原稿の課題を分析し、改善案を提案します。
+          アナリティクスデータを元にAIが既存原稿の課題を分析し、改善案を提案します。
         </p>
 
         {loadedFromHistory && (
@@ -277,7 +277,7 @@ export default function JobRewritePostingPage() {
                   ))}
               </div>
               <p className="text-[11px] text-blue-600 mt-2">
-                掲載担当が入力した数値がTeam Bの分析に使用されます
+                求人詳細ページで登録した掲載数値がAIの分析に使用されます
               </p>
             </CardContent>
           </Card>
@@ -291,7 +291,7 @@ export default function JobRewritePostingPage() {
                 </span>
               </div>
               <p className="text-xs text-amber-600 mt-1">
-                掲載担当者に数値入力を依頼してください。数値なしでもTeam Bを実行できますが、分析精度が下がります。
+                求人詳細ページの「掲載数値を登録」から入力できます。数値なしでも実行できますが、分析精度が下がります。
               </p>
             </CardContent>
           </Card>

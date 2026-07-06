@@ -29,19 +29,12 @@ export async function GET(
     .eq("jobId", id)
     .order("createdAt", { ascending: false });
 
-  const { data: publishRequests } = await supabase
-    .from("PublishRequest")
-    .select(`*, assignedUser:User!assignedTo(id, name)`)
-    .eq("jobId", id)
-    .order("createdAt", { ascending: false });
-
   return NextResponse.json({
     ...job,
     officeName: (job.Office as unknown as { name: string } | null)?.name || "",
     jobTypeName: (job.JobType as unknown as { name: string } | null)?.name || "",
     employmentTypeName: (job.EmploymentType as unknown as { name: string } | null)?.name || "",
     records: records || [],
-    publishRequests: publishRequests || [],
   });
 }
 

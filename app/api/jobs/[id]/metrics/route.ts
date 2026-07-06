@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth-guard";
-import { createNotification } from "@/lib/notifications";
+import { requireAuth } from "@/lib/auth-guard";
 import { extractKnowledge } from "@/lib/knowledge-extractor";
 
 export const runtime = "nodejs";
@@ -10,7 +9,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(["admin", "editor", "reviewer", "publisher"]);
+  const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
@@ -32,7 +31,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(["admin", "publisher"]);
+  const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
@@ -57,27 +56,6 @@ export async function POST(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // 作成者に通知
-  const { data: job } = await supabaseAdmin
-    .from("Job")
-    .select("createdBy, Office(name), JobType(name)")
-    .eq("id", id)
-    .single();
-
-  if (job?.createdBy) {
-    const officeData = job.Office as unknown as { name: string } | null;
-    const jobTypeData = job.JobType as unknown as { name: string } | null;
-    const officeName = officeData?.name || "";
-    const jobTypeName = jobTypeData?.name || "";
-    await createNotification(
-      job.createdBy,
-      id,
-      "metrics_entered",
-      `「${officeName} - ${jobTypeName}」の掲載数値が入力されました`,
-      `${body.platform} の数値が${auth.user.name}さんによって登録されました`
-    );
   }
 
   // メトリクス登録をトリガーにナレッジ自動抽出（非同期・エラー無視）

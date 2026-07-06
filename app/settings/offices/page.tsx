@@ -41,7 +41,6 @@ interface OfficeJob {
   id: string;
   jobTypeId: string;
   employmentTypeId: string;
-  status: string;
   JobType: { id: string; name: string; color?: string };
   EmploymentType: { id: string; name: string };
 }
@@ -390,11 +389,6 @@ export default function OfficesPage() {
                           <div key={job.id} className="px-3 py-2 border-b last:border-0 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="text-xs">{job.EmploymentType.name}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                {job.status === "draft" ? "下書き" :
-                                 job.status === "confirmed" ? "確定済み" :
-                                 job.status === "awaiting_republish" ? "再掲載待ち" : job.status}
-                              </Badge>
                             </div>
                             <Button
                               variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600"

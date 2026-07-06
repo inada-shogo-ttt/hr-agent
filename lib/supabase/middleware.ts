@@ -53,27 +53,5 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user) {
-    const { data: profile } = await supabase
-      .from("User")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role === "publisher") {
-      const allowedPaths = ["/publish", "/api/jobs", "/api/notifications", "/api/publish-requests", "/api/thumbnails"];
-      const isAllowed =
-        allowedPaths.some((p) => pathname.startsWith(p)) ||
-        pathname === "/" ||
-        isPublicPath;
-
-      if (!isAllowed) {
-        const redirectUrl = request.nextUrl.clone();
-        redirectUrl.pathname = "/publish";
-        return NextResponse.redirect(redirectUrl);
-      }
-    }
-  }
-
   return supabaseResponse;
 }

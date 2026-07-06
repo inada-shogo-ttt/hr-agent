@@ -2,15 +2,14 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Zap, RefreshCw, FileText, BarChart3, Clock,
+  RefreshCw, FileText, BarChart3, Clock,
   ChevronDown, ChevronUp, Copy, Check, ImageIcon,
-  Send, Calendar, CheckCircle,
+  CheckCircle, PenLine, ChevronRight, Plus, Trash2, Building2,
 } from "lucide-react";
 import {
   Select,
@@ -24,19 +23,13 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThumbnailPreview } from "@/app/components/output/ThumbnailPreview";
 import { ManuscriptOutput } from "@/app/components/output/ManuscriptOutput";
-import { ModificationDiffDialog } from "@/app/components/ModificationDiffDialog";
 import { AllPlatformPostings } from "@/types/platform";
-import { StatusBadge } from "@/app/components/StatusBadge";
-import { PublishRequestStatusBadge } from "@/app/components/PublishRequestStatusBadge";
-import { StatusTimeline } from "@/app/components/StatusTimeline";
-import { useUser } from "@/app/providers/auth-provider";
-import { JobStatus } from "@/types/auth";
-import { PublishRequestStatus } from "@/types/publish-request";
 import { toast } from "sonner";
 
 interface JobRecord {
@@ -50,41 +43,35 @@ interface JobRecord {
   thumbnailUrls: string | null;
 }
 
-interface PublishRequestEntry {
-  id: string;
-  platform: string;
-  status: PublishRequestStatus;
-  startDate: string | null;
-  endDate: string | null;
-  assignedUser: { id: string; name: string } | null;
-  createdAt: string;
-  modificationPending?: boolean;
-}
-
 interface JobDetail {
   id: string;
   officeId: string;
   officeName: string;
   jobTypeName: string;
   employmentTypeName: string;
-  status: JobStatus;
   createdBy: string | null;
   createdAt: string;
   records: JobRecord[];
-  publishRequests: PublishRequestEntry[];
 }
 
-interface UserOption {
+interface SourceJobEntry {
   id: string;
-  name: string;
-  role: string;
+  officeName: string;
+  jobTypeName: string;
+  employmentTypeName: string;
+  records: { type: string; platform: string; createdAt: string }[];
 }
 
-interface PlatformConfig {
+interface PublishMetric {
+  id: string;
   platform: string;
   startDate: string;
-  endDate: string;
-  assignedTo: string;
+  endDate: string | null;
+  impressions: number | null;
+  clicks: number | null;
+  applications: number | null;
+  cost: number | null;
+  notes: string | null;
 }
 
 const PLATFORM_OPTIONS = [
@@ -187,17 +174,7 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
 
   if (record.outputData) {
     try {
-      const parsed = JSON.parse(record.outputData);
-      if (isTeamA) {
-        if (record.platform === "all") {
-          outputFields = parsed;
-        } else {
-          outputFields = parsed;
-        }
-      } else {
-        // Team B: { improvedPosting: {...}, improvements: [...], ... }
-        outputFields = parsed;
-      }
+      outputFields = JSON.parse(record.outputData);
     } catch { /* ignore */ }
   }
 
@@ -242,7 +219,7 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
               variant="secondary"
               className={isTeamA ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}
             >
-              {isTeamA ? "チームA: 新規作成" : "チームB: 改善"}
+              {isTeamA ? "新規作成" : "ブラッシュアップ"}
             </Badge>
             {!isTeamA && improvements.length > 0 && (
               <Badge variant="outline" className="text-xs">
@@ -382,21 +359,33 @@ function getPlatformRecords(records: JobRecord[], platform: string): { record: J
     .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
+const emptyMetricsForm = {
+  platform: "indeed",
+  startDate: "",
+  endDate: "",
+  impressions: "",
+  clicks: "",
+  applications: "",
+  cost: "",
+  notes: "",
+};
+
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useUser();
   const jobId = params.id as string;
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [statusLoading, setStatusLoading] = useState(false);
 
-  // 掲載依頼ダイアログ
-  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
-  const [publishers, setPublishers] = useState<UserOption[]>([]);
-  const [defaultPublisher, setDefaultPublisher] = useState("");
-  const [platformConfigs, setPlatformConfigs] = useState<PlatformConfig[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  // 流用作成ダイアログ
+  const [reuseDialogOpen, setReuseDialogOpen] = useState(false);
+  const [sourceJobs, setSourceJobs] = useState<SourceJobEntry[] | null>(null);
+
+  // 掲載数値
+  const [metrics, setMetrics] = useState<PublishMetric[]>([]);
+  const [metricsDialogOpen, setMetricsDialogOpen] = useState(false);
+  const [metricsForm, setMetricsForm] = useState({ ...emptyMetricsForm });
+  const [metricsSubmitting, setMetricsSubmitting] = useState(false);
 
   function fetchJob() {
     fetch(`/api/jobs/${jobId}`)
@@ -409,94 +398,83 @@ export default function JobDetailPage() {
       .finally(() => setLoading(false));
   }
 
+  function fetchMetrics() {
+    fetch(`/api/jobs/${jobId}/metrics`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setMetrics)
+      .catch(() => { /* ignore */ });
+  }
+
   useEffect(() => {
     fetchJob();
+    fetchMetrics();
   }, [jobId, router]);
 
-  async function handleStatusAction(action: string) {
-    setStatusLoading(true);
-    const res = await fetch(`/api/jobs/${jobId}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    if (res.ok) {
-      toast.success("ステータスを更新しました");
-      fetchJob();
-    } else {
-      const data = await res.json();
-      toast.error(data.error || "エラーが発生しました");
+  // 流用元候補（原稿ありの他求人）をロード
+  function openReuseDialog() {
+    setReuseDialogOpen(true);
+    if (sourceJobs === null) {
+      fetch("/api/jobs")
+        .then((r) => (r.ok ? r.json() : []))
+        .then((jobs: SourceJobEntry[]) =>
+          setSourceJobs(
+            jobs.filter((j) => j.id !== jobId && j.records?.length > 0)
+          )
+        )
+        .catch(() => setSourceJobs([]));
     }
-    setStatusLoading(false);
   }
 
-  function openPublishDialog() {
-    fetch("/api/users")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((users: UserOption[]) =>
-        setPublishers(users.filter((u) => u.role === "publisher" || u.role === "admin"))
-      );
-    setPlatformConfigs([]);
-    setDefaultPublisher("");
-    setPublishDialogOpen(true);
-  }
-
-  function togglePlatform(platform: string) {
-    setPlatformConfigs((prev) => {
-      const exists = prev.find((p) => p.platform === platform);
-      if (exists) return prev.filter((p) => p.platform !== platform);
-      return [...prev, { platform, startDate: "", endDate: "", assignedTo: "" }];
-    });
-  }
-
-  function updatePlatformConfig(platform: string, field: string, value: string) {
-    setPlatformConfigs((prev) =>
-      prev.map((p) => (p.platform === platform ? { ...p, [field]: value } : p))
-    );
-  }
-
-  async function handlePublishSubmit() {
-    if (!defaultPublisher || platformConfigs.length === 0) {
-      toast.error("担当者と媒体を選択してください");
+  async function handleMetricsSubmit() {
+    if (!metricsForm.startDate) {
+      toast.error("掲載開始日を入力してください");
       return;
     }
-    setSubmitting(true);
-    const res = await fetch(`/api/jobs/${jobId}/publish-requests`, {
+    setMetricsSubmitting(true);
+    const res = await fetch(`/api/jobs/${jobId}/metrics`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        defaultAssignedTo: defaultPublisher,
-        platforms: platformConfigs.map((p) => ({
-          platform: p.platform,
-          assignedTo: p.assignedTo || undefined,
-          startDate: p.startDate || undefined,
-          endDate: p.endDate || undefined,
-        })),
+        platform: metricsForm.platform,
+        startDate: metricsForm.startDate,
+        endDate: metricsForm.endDate || null,
+        impressions: metricsForm.impressions ? Number(metricsForm.impressions) : null,
+        clicks: metricsForm.clicks ? Number(metricsForm.clicks) : null,
+        applications: metricsForm.applications ? Number(metricsForm.applications) : null,
+        cost: metricsForm.cost ? Number(metricsForm.cost) : null,
+        notes: metricsForm.notes || null,
       }),
     });
     if (res.ok) {
-      toast.success("掲載依頼を送信しました");
-      setPublishDialogOpen(false);
-      fetchJob();
+      toast.success("掲載数値を登録しました");
+      setMetricsDialogOpen(false);
+      setMetricsForm({ ...emptyMetricsForm });
+      fetchMetrics();
     } else {
       const data = await res.json();
-      toast.error(data.error);
+      toast.error(data.error || "登録に失敗しました");
     }
-    setSubmitting(false);
+    setMetricsSubmitting(false);
+  }
+
+  async function handleMetricsDelete(metricsId: string) {
+    const res = await fetch(`/api/jobs/${jobId}/metrics/${metricsId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      toast.success("掲載数値を削除しました");
+      fetchMetrics();
+    } else {
+      toast.error("削除に失敗しました");
+    }
   }
 
   // 最新原稿の編集状態
   const [latestOutput, setLatestOutput] = useState<AllPlatformPostings | null>(null);
   const [latestRecordId, setLatestRecordId] = useState<string | null>(null);
-  const [modificationSaving, setModificationSaving] = useState(false);
-  const [showModificationDiff, setShowModificationDiff] = useState(false);
-  const savedOutputRef = useRef<AllPlatformPostings | null>(null);
   const [manuscriptSaveStatus, setManuscriptSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestOutputRef = useRef<AllPlatformPostings | null>(null);
-
-  // 掲載中かどうか
-  const hasPublishing = job?.publishRequests?.some((pr) => pr.status === "publishing") || false;
 
   // 最新の原稿をDBから取得
   // Team A レコードを正として使う（全媒体のデータを持つため）
@@ -516,7 +494,6 @@ export default function JobDetailPage() {
 
       setLatestOutput(parsed);
       setLatestRecordId(teamARecord.id);
-      savedOutputRef.current = JSON.parse(JSON.stringify(parsed));
       manuscriptLoadedRef.current = true;
     } catch { /* ignore */ }
   }, [job]);
@@ -562,42 +539,6 @@ export default function JobDetailPage() {
     }, 2000);
   }
 
-  function openModificationDiff() {
-    if (!latestOutput || !savedOutputRef.current) return;
-    setShowModificationDiff(true);
-  }
-
-  async function handleModificationConfirm() {
-    const rid = latestRecordIdRef.current;
-    if (!latestOutput || !rid) return;
-    setModificationSaving(true);
-
-    // デバウンスタイマーがあればキャンセルして即保存
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-
-    // 原稿をDB保存（PATCH APIが掲載中のPublishRequestへの通知も自動で行う）
-    const res = await fetch(`/api/jobs/${jobId}/records/${rid}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ outputData: latestOutput }),
-    });
-
-    if (res.ok) {
-      if (hasPublishing) {
-        toast.success("修正依頼を掲載担当に送信しました");
-      } else {
-        toast.success("原稿を保存しました");
-      }
-      // savedOutputRef を更新（送信後は新しい状態がベースになる）
-      savedOutputRef.current = JSON.parse(JSON.stringify(latestOutput));
-      fetchJob();
-    } else {
-      toast.error("修正依頼の送信に失敗しました");
-    }
-    setModificationSaving(false);
-    setShowModificationDiff(false);
-  }
-
   if (loading || !job) {
     return (
       <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
@@ -625,143 +566,172 @@ export default function JobDetailPage() {
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-bold">{job.officeName}</h1>
             <Badge variant="outline">{job.employmentTypeName}</Badge>
-            <StatusBadge status={job.status || "draft"} />
           </div>
           <p className="text-lg text-muted-foreground">{job.jobTypeName}</p>
           <p className="text-xs text-muted-foreground mt-1">
             登録日: {new Date(job.createdAt).toLocaleDateString("ja-JP")} / ID: {job.id}
           </p>
-
         </div>
 
-        {/* アクションバー */}
-        {(user?.role === "editor" || user?.role === "admin") && (
-          <div className="mb-6 p-3 rounded-lg bg-gray-50 border flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* draft: Team A 作成 + 確定 */}
-              {job.status === "draft" && (
-                <>
-                  <Link href={`/jobs/${jobId}/new-posting`}>
-                    <Button size="sm">
-                      <Zap className="w-4 h-4 mr-1.5" />
-                      Team A 原稿作成
-                    </Button>
-                  </Link>
-                  {hasTeamARecord && (
-                    <Button
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700"
-                      onClick={() => handleStatusAction("confirm")}
-                      disabled={statusLoading}
-                    >
-                      <Check className="w-4 h-4 mr-1.5" />
-                      確定する
-                    </Button>
-                  )}
-                </>
-              )}
+        {/* 原稿作成アクション: 3パターン */}
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-gray-500 mb-3">原稿を作成する</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* ① 新規作成 */}
+            <button
+              onClick={() => router.push(`/jobs/${jobId}/new-posting`)}
+              className="group text-left rounded-xl border-2 border-gray-200 bg-white p-5 hover:border-blue-400 hover:shadow-md transition-all"
+            >
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center mb-3">
+                <PenLine className="w-5 h-5 text-blue-600" />
+              </div>
+              <p className="font-bold text-sm mb-1">新規作成</p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                求人情報を入力して、AIがゼロから4媒体分の原稿を作成します
+              </p>
+              <div className="flex items-center gap-1 mt-3 text-xs font-medium text-blue-600">
+                はじめる
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
 
-              {/* confirmed: 掲載依頼 + 修正依頼 + Team B */}
-              {job.status === "confirmed" && (
-                <>
-                  {hasTeamARecord && (
-                    <Button size="sm" onClick={openPublishDialog}>
-                      <Send className="w-4 h-4 mr-1.5" />
-                      掲載依頼
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    onClick={openModificationDiff}
-                    disabled={modificationSaving}
-                    className="bg-orange-600 hover:bg-orange-700"
-                  >
-                    <Send className="w-4 h-4 mr-1.5" />
-                    修正依頼
-                  </Button>
-                  <Link href={`/jobs/${jobId}/rewrite-posting`}>
-                    <Button size="sm" variant="outline">
-                      <RefreshCw className="w-4 h-4 mr-1.5" />
-                      求人をブラッシュアップする
-                    </Button>
-                  </Link>
-                </>
-              )}
+            {/* ② 流用して作成 */}
+            <button
+              onClick={openReuseDialog}
+              className="group text-left rounded-xl border-2 border-gray-200 bg-white p-5 hover:border-violet-400 hover:shadow-md transition-all"
+            >
+              <div className="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center mb-3">
+                <Copy className="w-5 h-5 text-violet-600" />
+              </div>
+              <p className="font-bold text-sm mb-1">既存求人を流用して作成</p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                他の求人の原稿をベースに、この求人用の原稿を作成します
+              </p>
+              <div className="flex items-center gap-1 mt-3 text-xs font-medium text-violet-600">
+                流用元を選ぶ
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
 
-              {/* awaiting_republish: 求人をブラッシュアップする */}
-              {job.status === "awaiting_republish" && (
-                <Link href={`/jobs/${jobId}/rewrite-posting`}>
-                  <Button size="sm" variant="outline">
-                    <RefreshCw className="w-4 h-4 mr-1.5" />
-                    求人をブラッシュアップする
-                  </Button>
-                </Link>
+            {/* ③ ブラッシュアップ */}
+            <button
+              onClick={() => hasTeamARecord && router.push(`/jobs/${jobId}/rewrite-posting`)}
+              disabled={!hasTeamARecord}
+              className={`group text-left rounded-xl border-2 p-5 transition-all ${
+                hasTeamARecord
+                  ? "border-gray-200 bg-white hover:border-amber-400 hover:shadow-md"
+                  : "border-gray-100 bg-gray-50 cursor-not-allowed"
+              }`}
+            >
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${
+                hasTeamARecord ? "bg-amber-50" : "bg-gray-100"
+              }`}>
+                <RefreshCw className={`w-5 h-5 ${hasTeamARecord ? "text-amber-600" : "text-gray-300"}`} />
+              </div>
+              <p className={`font-bold text-sm mb-1 ${!hasTeamARecord ? "text-gray-400" : ""}`}>
+                掲載中の求人をブラッシュアップ
+              </p>
+              <p className={`text-xs leading-relaxed ${hasTeamARecord ? "text-gray-500" : "text-gray-400"}`}>
+                {hasTeamARecord
+                  ? "アナリティクスデータを元にAIが原稿を分析・改善します"
+                  : "先に原稿を作成すると利用できます"}
+              </p>
+              {hasTeamARecord && (
+                <div className="flex items-center gap-1 mt-3 text-xs font-medium text-amber-600">
+                  ブラッシュアップする
+                  <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </div>
               )}
-            </div>
-
-            {/* 保存ステータス */}
-            <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
-              {manuscriptSaveStatus === "saving" && (
-                <>
-                  <div className="w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                  保存中...
-                </>
-              )}
-              {manuscriptSaveStatus === "saved" && (
-                <>
-                  <CheckCircle className="w-3 h-3 text-green-500" />
-                  保存済み
-                </>
-              )}
-            </span>
+            </button>
           </div>
-        )}
+        </div>
 
-        {/* PublishRequest 一覧 */}
-        {job.publishRequests && job.publishRequests.length > 0 && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-base">掲載依頼状況</CardTitle>
-            </CardHeader>
-            <CardContent>
+        {/* 掲載数値（アナリティクスデータ） */}
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  掲載数値（アナリティクスデータ）
+                </CardTitle>
+                <p className="text-xs text-gray-500 mt-1">
+                  媒体の掲載結果を登録すると、ブラッシュアップ時にAIが分析に使用します
+                </p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setMetricsDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" />
+                数値を登録
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {metrics.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                まだ掲載数値が登録されていません
+              </p>
+            ) : (
               <div className="space-y-2">
-                {job.publishRequests.map((pr) => (
+                {metrics.map((m) => (
                   <div
-                    key={pr.id}
+                    key={m.id}
                     className="flex items-center justify-between p-3 rounded-lg border bg-gray-50/50"
                   >
-                    <div className="flex items-center gap-3">
-                      <PublishRequestStatusBadge status={pr.status} />
-                      <span className="text-sm font-medium">
-                        {PLATFORM_OPTIONS.find((p) => p.value === pr.platform)?.label || pr.platform}
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <Badge variant="secondary" className="shrink-0">
+                        {PLATFORM_OPTIONS.find((p) => p.value === m.platform)?.label || m.platform}
+                      </Badge>
+                      <span className="text-xs text-gray-500">
+                        {m.startDate}{m.endDate ? ` ~ ${m.endDate}` : " ~"}
                       </span>
+                      <div className="flex items-center gap-3 text-xs">
+                        {m.impressions != null && <span>表示 <b>{m.impressions.toLocaleString()}</b></span>}
+                        {m.clicks != null && <span>クリック <b>{m.clicks.toLocaleString()}</b></span>}
+                        {m.applications != null && <span>応募 <b>{m.applications.toLocaleString()}</b></span>}
+                        {m.cost != null && <span>費用 <b>¥{m.cost.toLocaleString()}</b></span>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      {pr.startDate && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {pr.startDate}{pr.endDate ? ` ~ ${pr.endDate}` : ""}
-                        </span>
-                      )}
-                      {pr.assignedUser && (
-                        <span>担当: {pr.assignedUser.name}</span>
-                      )}
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-gray-400 hover:text-red-500 shrink-0"
+                      onClick={() => handleMetricsDelete(m.id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
 
         {/* 最新の原稿表示・編集 */}
-        {job.status === "confirmed" && latestOutput && (user?.role === "editor" || user?.role === "admin") && (
+        {latestOutput && (
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle className="text-base">最新の原稿</CardTitle>
-              <p className="text-xs text-gray-500 mt-1">
-                原稿を編集すると自動保存されます
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">最新の原稿</CardTitle>
+                  <p className="text-xs text-gray-500 mt-1">
+                    原稿を編集すると自動保存されます
+                  </p>
+                </div>
+                <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                  {manuscriptSaveStatus === "saving" && (
+                    <>
+                      <div className="w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                      保存中...
+                    </>
+                  )}
+                  {manuscriptSaveStatus === "saved" && (
+                    <>
+                      <CheckCircle className="w-3 h-3 text-green-500" />
+                      保存済み
+                    </>
+                  )}
+                </span>
+              </div>
             </CardHeader>
             <CardContent>
               <ManuscriptOutput
@@ -770,166 +740,161 @@ export default function JobDetailPage() {
                 jobId={jobId}
                 onOutputChange={handleLatestOutputChange}
               />
-
-              {/* 修正依頼ログ */}
-              {job.publishRequests && job.publishRequests.length > 0 && (
-                <div className="mt-6 border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">掲載担当への修正依頼状況</h4>
-                  <div className="space-y-2">
-                    {job.publishRequests.map((pr) => (
-                        <div
-                          key={pr.id}
-                          className={`flex items-center justify-between p-2.5 rounded-lg border text-sm ${
-                            pr.modificationPending
-                              ? "bg-orange-50 border-orange-200"
-                              : pr.status === "expired"
-                              ? "bg-gray-100 border-gray-200 opacity-60"
-                              : "bg-gray-50 border-gray-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              {PLATFORM_OPTIONS.find((p) => p.value === pr.platform)?.label || pr.platform}
-                            </span>
-                            <PublishRequestStatusBadge status={pr.status} />
-                            {pr.modificationPending ? (
-                              <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-200 text-[10px]">
-                                修正依頼中
-                              </Badge>
-                            ) : pr.status !== "expired" ? (
-                              <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 text-[10px]">
-                                最新反映済み
-                              </Badge>
-                            ) : null}
-                          </div>
-                          {pr.assignedUser && (
-                            <span className="text-xs text-gray-500">担当: {pr.assignedUser.name}</span>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
 
-        {/* 掲載依頼ダイアログ */}
-        <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+        {/* 流用元選択ダイアログ */}
+        <Dialog open={reuseDialogOpen} onOpenChange={setReuseDialogOpen}>
           <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>掲載依頼</DialogTitle>
+              <DialogTitle>流用元の求人を選択</DialogTitle>
+              <DialogDescription>
+                選択した求人の入力内容をベースに、この求人用の原稿を作成します
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-5 mt-2">
+            <div className="space-y-2 mt-2">
+              {sourceJobs === null ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground gap-2">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                  読み込み中...
+                </div>
+              ) : sourceJobs.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  流用できる求人がありません。原稿を作成済みの求人が流用元になります。
+                </p>
+              ) : (
+                sourceJobs.map((sj) => (
+                  <button
+                    key={sj.id}
+                    onClick={() =>
+                      router.push(`/jobs/${jobId}/new-posting?source=${sj.id}`)
+                    }
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border hover:border-violet-300 hover:bg-violet-50/40 transition-colors text-left"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-violet-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {sj.officeName} / {sj.jobTypeName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {sj.employmentTypeName}
+                        {sj.records[0] && (
+                          <> ・ 最終作成 {new Date(sj.records[0].createdAt).toLocaleDateString("ja-JP")}</>
+                        )}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                  </button>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* 掲載数値登録ダイアログ */}
+        <Dialog open={metricsDialogOpen} onOpenChange={setMetricsDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>掲載数値を登録</DialogTitle>
+              <DialogDescription>
+                媒体の管理画面で確認できる数値を入力してください
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-2">
               <div className="space-y-2">
-                <Label>デフォルトの掲載担当者</Label>
-                <Select value={defaultPublisher} onValueChange={setDefaultPublisher}>
+                <Label>媒体</Label>
+                <Select
+                  value={metricsForm.platform}
+                  onValueChange={(v) => setMetricsForm((f) => ({ ...f, platform: v }))}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="掲載担当者を選択" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {publishers.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    {PLATFORM_OPTIONS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>掲載する媒体</Label>
-                <div className="flex flex-wrap gap-2">
-                  {PLATFORM_OPTIONS.map((p) => {
-                    const selected = platformConfigs.some((c) => c.platform === p.value);
-                    // 既に active な PublishRequest がある媒体は除外
-                    const hasActive = job?.publishRequests?.some(
-                      (pr) => pr.platform === p.value && pr.status !== "expired"
-                    );
-                    if (hasActive) return null;
-                    return (
-                      <Button
-                        key={p.value}
-                        type="button"
-                        variant={selected ? "default" : "outline"}
-                        size="sm"
-                        className="text-xs h-7"
-                        onClick={() => togglePlatform(p.value)}
-                      >
-                        {selected && <Check className="w-3 h-3 mr-1" />}
-                        {p.label}
-                      </Button>
-                    );
-                  })}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">掲載開始日 *</Label>
+                  <Input
+                    type="date"
+                    value={metricsForm.startDate}
+                    onChange={(e) => setMetricsForm((f) => ({ ...f, startDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">掲載終了日</Label>
+                  <Input
+                    type="date"
+                    value={metricsForm.endDate}
+                    onChange={(e) => setMetricsForm((f) => ({ ...f, endDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">表示回数</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={metricsForm.impressions}
+                    onChange={(e) => setMetricsForm((f) => ({ ...f, impressions: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">クリック数</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={metricsForm.clicks}
+                    onChange={(e) => setMetricsForm((f) => ({ ...f, clicks: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">応募数</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={metricsForm.applications}
+                    onChange={(e) => setMetricsForm((f) => ({ ...f, applications: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">掲載費用（円）</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={metricsForm.cost}
+                    onChange={(e) => setMetricsForm((f) => ({ ...f, cost: e.target.value }))}
+                  />
                 </div>
               </div>
 
-              {platformConfigs.map((config) => (
-                <div key={config.platform} className="p-3 rounded-lg bg-gray-50 border space-y-3">
-                  <Label className="text-xs font-semibold">
-                    {PLATFORM_OPTIONS.find((p) => p.value === config.platform)?.label}
-                  </Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[11px] text-gray-500">掲載開始日</Label>
-                      <Input
-                        type="date"
-                        value={config.startDate}
-                        onChange={(e) => updatePlatformConfig(config.platform, "startDate", e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-gray-500">掲載終了日</Label>
-                      <Input
-                        type="date"
-                        value={config.endDate}
-                        onChange={(e) => updatePlatformConfig(config.platform, "endDate", e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-gray-500">担当者を上書き（任意）</Label>
-                    <Select
-                      value={config.assignedTo}
-                      onValueChange={(v) => updatePlatformConfig(config.platform, "assignedTo", v)}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="デフォルト担当者を使用" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {publishers.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              ))}
+              <div className="space-y-1">
+                <Label className="text-xs">備考</Label>
+                <Input
+                  value={metricsForm.notes}
+                  onChange={(e) => setMetricsForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="キャンペーン内容など"
+                />
+              </div>
 
               <Button
                 className="w-full"
-                disabled={submitting || !defaultPublisher || platformConfigs.length === 0}
-                onClick={handlePublishSubmit}
+                disabled={metricsSubmitting || !metricsForm.startDate}
+                onClick={handleMetricsSubmit}
               >
-                {submitting ? "送信中..." : `${platformConfigs.length}媒体の掲載依頼を送信`}
+                {metricsSubmitting ? "登録中..." : "登録する"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
-
-        {/* 修正差分確認ダイアログ */}
-        {savedOutputRef.current && latestOutput && (
-          <ModificationDiffDialog
-            open={showModificationDiff}
-            onOpenChange={setShowModificationDiff}
-            savedOutput={savedOutputRef.current}
-            currentOutput={latestOutput}
-            onConfirm={handleModificationConfirm}
-            loading={modificationSaving}
-          />
-        )}
-
-        {/* Team A アクションカードは削除 — アクションバーに統合 */}
 
         {/* 媒体別タブ */}
         <Card>
@@ -941,7 +906,7 @@ export default function JobDetailPage() {
           <CardContent>
             {job.records.length === 0 ? (
               <p className="text-center text-muted-foreground py-6">
-                まだ実行履歴がありません。Team Aで原稿を作成してください。
+                まだ実行履歴がありません。上のメニューから原稿を作成してください。
               </p>
             ) : (
               <Tabs defaultValue="indeed">
@@ -987,12 +952,6 @@ export default function JobDetailPage() {
                 })}
               </Tabs>
             )}
-          </CardContent>
-        </Card>
-        {/* ステータス履歴 */}
-        <Card className="mt-6">
-          <CardContent className="pt-6">
-            <StatusTimeline jobId={jobId} />
           </CardContent>
         </Card>
       </div>

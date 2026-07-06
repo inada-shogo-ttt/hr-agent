@@ -1,34 +1,10 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Briefcase, BookOpen, ArrowRight, PenLine, BarChart3, RefreshCw, ArrowDown } from "lucide-react";
+import { Briefcase, ArrowRight, PenLine, BarChart3, RefreshCw, ArrowDown } from "lucide-react";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#FAFAF8]">
-      {/* ===== ナビ ===== */}
-      <header className="sticky top-0 z-50 border-b border-gray-200/60 bg-[#FAFAF8]/80 backdrop-blur-md">
-        <div className="max-w-[1100px] mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-gray-900 text-white text-xs font-bold tracking-tight">採</span>
-            <span className="text-[15px] font-semibold tracking-tight text-gray-900">採用エージェント</span>
-          </Link>
-          <nav className="flex items-center gap-2">
-            <Link href="/references">
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 text-[13px] h-8 px-3">
-                <BookOpen className="w-3.5 h-3.5 mr-1.5" />
-                参考原稿
-              </Button>
-            </Link>
-            <Link href="/jobs">
-              <Button size="sm" className="text-[13px] h-8 px-4 bg-gray-900 hover:bg-gray-800 rounded-lg">
-                <Briefcase className="w-3.5 h-3.5 mr-1.5" />
-                求人管理
-              </Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       {/* ===== ヒーロー ===== */}
       <section className="relative overflow-hidden">
         {/* 背景のやわらかい幾何学 */}

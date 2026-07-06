@@ -19,7 +19,8 @@ const PLATFORM_LABELS: Record<PlatformKey, string> = {
 };
 
 const PLATFORM_EXTRA_RULES: Record<PlatformKey, string> = {
-  indeed: "",
+  indeed:
+    "\n8. Indeed原稿は定型フォーマット（⭕✅✨等の記号、見出し、区切り線、改行構成）で書かれている。修正する場合も事実に関する記述のみを直し、フォーマット・構成・記号は絶対に変更しないこと",
   airwork: "",
   jobmedley: "",
   hellowork: "\n8. ハローワーク原稿が全角文字のみで記載されているか（半角文字・絵文字がないか）",

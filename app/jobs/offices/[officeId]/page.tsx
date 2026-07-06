@@ -13,14 +13,11 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { StatusBadge } from "@/app/components/StatusBadge";
 import { Plus, ChevronRight, Check } from "lucide-react";
 import { toast } from "sonner";
-import { JobStatus } from "@/types/auth";
 
 interface JobEntry {
   id: string;
-  status: JobStatus;
   createdAt: string;
   JobType: { id: string; name: string; color?: string };
   EmploymentType: { id: string; name: string };
@@ -216,20 +213,18 @@ export default function OfficeDetailPage() {
                             <span className="text-sm font-medium">
                               {job.EmploymentType.name}
                             </span>
-                            <StatusBadge status={job.status} />
                           </div>
                           <div className="flex items-center gap-2">
                             {latest ? (
                               <span className="text-[11px] text-gray-400">
-                                {latest.type === "team-a" ? "Team A" : "Team B"}{" "}
-                                / {latest.platform} /{" "}
-                                {new Date(latest.createdAt).toLocaleDateString(
+                                {latest.type === "team-a" ? "新規作成" : "ブラッシュアップ"}{" "}
+                                / {new Date(latest.createdAt).toLocaleDateString(
                                   "ja-JP"
                                 )}
                               </span>
                             ) : (
                               <span className="text-[11px] text-gray-400">
-                                未実行
+                                原稿未作成
                               </span>
                             )}
                             <ChevronRight className="w-4 h-4 text-gray-300" />
