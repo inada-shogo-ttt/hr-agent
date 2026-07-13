@@ -307,4 +307,5 @@ export interface JobPostingInput {
   airwork?: AirWorkSpecificInfo;
   jobmedley?: JobMedleySpecificInfo;
   hellowork?: HelloWorkSpecificInfo;
+  thumbnailReference?: string | null; // サムネイル参考画像 (data URL)。指定時は i2i 生成
 }

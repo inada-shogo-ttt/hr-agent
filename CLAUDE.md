@@ -44,7 +44,7 @@ npm start       # node ./node_modules/next/dist/bin/next start
 
 - モデル ID を**ハードコードしない**。必ず `lib/claude.ts` の定数を import する。
 - 勝手に Claude 4.7 系へ上げない（本プロジェクトは 4.6 系固定）。上げる場合は `lib/claude.ts` 一箇所で変更し、事前にユーザー確認。
-- 画像生成は Gemini（`lib/nanobanana.ts`）。高速 = `gemini-2.5-flash-image`、高品質 = `gemini-3-pro-image-preview`。
+- 画像生成は OpenAI `gpt-image-2`（`lib/nanobanana.ts`、`OPENAI_API_KEY` 使用、fetch 直叩きで `openai` パッケージは未導入）。参考画像あり = `images/edits`、なし = `images/generations`。旧 Imagen 4 / Gemini は廃止済み。
 
 ---
 
@@ -116,7 +116,7 @@ generated/          自動生成物 — 手で触らない
 - TypeScript は `strict: true`。型エラーを `any` で潰さず、`types/` に型を追加して解決する。
 - 大きめの変更後は `npm run build` を通す（HMR だけで OK としない）。
 - コミット prefix は直近履歴に合わせ `feat:` / `fix:` / `perf:` / `docs:` / `chore:` + 日本語サマリ。
-- 機微情報を含めない: `.env.local`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` / `NANOBANANA_API_KEY`, Supabase Service Role キー。
+- 機微情報を含めない: `.env.local`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` / `NANOBANANA_API_KEY`, Supabase Service Role キー。
 
 ---
 

@@ -198,6 +198,10 @@ export default function JobProgressPage() {
         try {
           const inputDataStr = sessionStorage.getItem("jobPostingInput");
           if (inputDataStr) inputDataParsed = JSON.parse(inputDataStr);
+          // 参考画像(base64)はDBに保存しない（レコード肥大化防止）
+          if (inputDataParsed?.thumbnailReference) {
+            delete inputDataParsed.thumbnailReference;
+          }
         } catch {
           console.warn("[progress] inputData の JSON パースに失敗");
         }

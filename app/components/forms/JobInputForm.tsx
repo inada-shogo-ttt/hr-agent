@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,9 @@ import { HelloWorkFields } from "./HelloWorkFields";
 import { SmartDefaultsSelector } from "./SmartDefaultsSelector";
 import { AIInputMode } from "./AIInputMode";
 import { JobPostingInput, CommonJobInfo } from "@/types/job-posting";
-import { Sparkles, ClipboardEdit } from "lucide-react";
+import { Sparkles, ClipboardEdit, ImageIcon, X } from "lucide-react";
+import { fileToCompressedDataUrl } from "@/lib/client-image";
+import { toast } from "sonner";
 
 const defaultCommonInfo: CommonJobInfo = {
   companyName: "",
@@ -63,6 +65,19 @@ export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
     jobmedley: initialData?.jobmedley || {},
     hellowork: initialData?.hellowork || {},
   });
+  const thumbnailRefInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleThumbnailReferenceUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (thumbnailRefInputRef.current) thumbnailRefInputRef.current.value = "";
+    if (!file?.type.startsWith("image/")) return;
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      setFormData((prev) => ({ ...prev, thumbnailReference: dataUrl }));
+    } catch {
+      toast.error("画像の読み込みに失敗しました");
+    }
+  }
 
   const updateCommon = (data: Partial<CommonJobInfo>) => {
     setFormData((prev) => ({
@@ -131,6 +146,55 @@ export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
           </div>
         </button>
       </div>
+
+      {/* サムネイル参考画像（両モード共通・任意） */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-4">
+            <input
+              ref={thumbnailRefInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleThumbnailReferenceUpload}
+              className="hidden"
+            />
+            {formData.thumbnailReference ? (
+              <div className="relative shrink-0 w-40 aspect-video rounded-lg overflow-hidden border group">
+                <img
+                  src={formData.thumbnailReference}
+                  alt="サムネイル参考画像"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({ ...prev, thumbnailReference: null }))
+                  }
+                  className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="参考画像を削除"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => thumbnailRefInputRef.current?.click()}
+                className="shrink-0 w-40 aspect-video rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 bg-gray-50 flex flex-col items-center justify-center gap-1 transition-colors"
+              >
+                <ImageIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-xs text-gray-500">画像を選択</span>
+              </button>
+            )}
+            <div>
+              <p className="font-medium text-sm mb-1">サムネイル参考画像（任意）</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                実際の職場写真や過去に成果が出たサムネイルを登録すると、AIがその構図・色調・雰囲気を踏襲してサムネイルを生成します。未登録の場合は求人情報から自動生成します。
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* AI Input Mode */}
       {inputMode === "ai" && (

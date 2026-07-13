@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Trash2, Plus, ImageIcon } from "lucide-react";
+import { ThumbnailRegenerateDialog } from "./ThumbnailRegenerateDialog";
 
 interface ThumbnailPreviewProps {
   urls: string[];
@@ -10,6 +11,7 @@ interface ThumbnailPreviewProps {
   editable?: boolean;
   jobId?: string;
   platform?: string;
+  regeneratePrompt?: string;
   onUrlsChange?: (urls: string[]) => void;
 }
 
@@ -28,6 +30,7 @@ export function ThumbnailPreview({
   editable = false,
   jobId,
   platform,
+  regeneratePrompt,
   onUrlsChange,
 }: ThumbnailPreviewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -124,6 +127,18 @@ export function ThumbnailPreview({
     onUrlsChange?.(newUrls);
   }
 
+  // AIで再生成（編集モード + jobId/platform がある場合のみ）
+  const regenerateDialog =
+    editable && jobId && platform ? (
+      <ThumbnailRegenerateDialog
+        jobId={jobId}
+        platform={platform}
+        currentUrls={urls}
+        defaultPrompt={regeneratePrompt}
+        onGenerated={(newUrls) => onUrlsChange?.([...urls, ...newUrls])}
+      />
+    ) : null;
+
   // 画像なし + 編集モード → アップロードエリア
   if (urls.length === 0 && editable) {
     return (
@@ -150,6 +165,7 @@ export function ThumbnailPreview({
             </>
           )}
         </button>
+        {regenerateDialog}
       </div>
     );
   }
@@ -272,6 +288,8 @@ export function ThumbnailPreview({
           </button>
         )}
       </div>
+
+      {regenerateDialog}
     </div>
   );
 }

@@ -1,7 +1,9 @@
 // 画像生成API
-// エンジン: OpenAI gpt-image-2（テキスト生成 = images/generations、参考画像あり = images/edits）
+// メイン: Imagen 4 (imagen-4.0-generate-001) — Google最新・最高品質
+// フォールバック: Nano Banana (gemini-2.5-flash-image)
 // プロンプト生成: Claude API で求人情報から最適な画像プロンプトを自動生成
 
+import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
 
@@ -17,7 +19,6 @@ export interface ThumbnailGenerationRequest {
     colorPalette?: string;         // カラーパレットの説明
     sceneDescription?: string;     // 場面の説明
   };
-  referenceImage?: string | null;  // 参考画像 (data URL)。指定時は images/edits で Image-to-Image 生成
 }
 
 export interface ThumbnailGenerationResponse {
@@ -47,6 +48,12 @@ const PLATFORM_IMAGE_CONFIG = {
   jobmedley: { width: 1024, height: 576, aspectRatio: "16:9" as const },
 };
 
+const PLACEHOLDER_THUMBNAILS = [
+  "https://placehold.co/1344x768/1e40af/ffffff?text=サムネイル+1",
+  "https://placehold.co/1344x768/1d4ed8/ffffff?text=サムネイル+2",
+  "https://placehold.co/1344x768/2563eb/ffffff?text=サムネイル+3",
+];
+
 function makePlaceholders(width: number, height: number): string[] {
   return [
     `https://placehold.co/${width}x${height}/1e40af/ffffff?text=サムネイル+1`,
@@ -71,7 +78,7 @@ async function generateImagePromptsWithClaude(
   const message = await anthropic.messages.create({
     model: DEFAULT_MODEL,
     max_tokens: 2048,
-    system: `あなたは画像生成AI（gpt-image-2）向けのプロンプトエンジニアです。日本語の求人情報をもとに、求人バナー画像を生成するための最適なプロンプトを3パターン作成してください。プロンプトは必ず日本語で書いてください。指定されたJSON形式のみを出力し、他のテキストは一切含めないでください。
+    system: `あなたは画像生成AI（Imagen 4）向けのプロンプトエンジニアです。日本語の求人情報をもとに、求人バナー画像を生成するための最適なプロンプトを3パターン作成してください。プロンプトは必ず日本語で書いてください。指定されたJSON形式のみを出力し、他のテキストは一切含めないでください。
 
 重要: 3パターンすべてで以下のビジュアル要素を統一してください:
 - 登場人物の服装（業種に応じたユニフォームを統一）
@@ -100,9 +107,6 @@ ${request.visualStyle ? `
 - 服装: ${request.visualStyle.uniformDescription || "業種に適したユニフォーム"}
 - カラーパレット: ${request.visualStyle.colorPalette || "プロフェッショナルな配色"}
 - シーン: ${request.visualStyle.sceneDescription || "職場空間"}
-` : ""}${request.referenceImage ? `
-## 参考画像あり
-画像生成時に参考画像が添付されます。各プロンプトの冒頭に「添付の参考画像の構図・色調・雰囲気・スタイルを踏襲しつつ」という指示を必ず含めてください。
 ` : ""}
 ## 3パターンの違い（上記統一ルールを守りつつ、以下の点のみ変化させる）
 1. **corporate**: 正面アングル、メインカラー＋白の配色、落ち着いたプロフェッショナルな表情
@@ -182,7 +186,11 @@ function buildFallbackPrompt(
 }
 
 function getApiKey(): string | undefined {
-  return process.env.OPENAI_API_KEY;
+  return (
+    process.env.GEMINI_API_KEY ||
+    process.env.NANOBANANA_API_KEY ||
+    process.env.GOOGLE_AI_API_KEY
+  );
 }
 
 // ---------- 画像リサイズ・圧縮（PNG維持 + 高品質） ----------
@@ -227,87 +235,64 @@ async function compressImage(
   return `data:image/jpeg;base64,${result.toString("base64")}`;
 }
 
-// ---------- 画像生成エンジン (OpenAI gpt-image-2) ----------
+// ---------- 画像生成エンジン ----------
 
-const GPT_IMAGE_MODEL = "gpt-image-2";
-
-// アスペクト比 → gpt-image-2 の size 指定（両辺16の倍数である必要あり）
-const ASPECT_SIZE_MAP: Record<string, string> = {
-  "16:9": "1024x576",
-  "4:3": "1024x768",
-  "1:1": "1024x1024",
-  "3:4": "768x1024",
-  "9:16": "576x1024",
-};
-
-// data URL を mimeType と base64 に分解
-function dataUrlToInlineData(dataUrl: string): { mimeType: string; data: string } | null {
-  const matches = dataUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
-  if (!matches) return null;
-  return { mimeType: matches[1], data: matches[2] };
-}
-
-// gpt-image-2 で1枚生成（参考画像あり = images/edits、なし = images/generations）
-async function generateWithGptImage(
+// Imagen 4 で1バリエーションを生成
+async function generateWithImagen4(
+  ai: GoogleGenAI,
   prompt: string,
   aspectRatio: string = "16:9",
-  referenceImage?: string | null,
 ): Promise<string> {
-  const apiKey = getApiKey();
-  const size = ASPECT_SIZE_MAP[aspectRatio] || "1024x1024";
+  const response = await ai.models.generateImages({
+    model: "imagen-4.0-generate-001",
+    prompt,
+    config: {
+      numberOfImages: 1,
+      aspectRatio,
+    },
+  });
 
-  let response: Response;
-  if (referenceImage) {
-    const inline = dataUrlToInlineData(referenceImage);
-    if (!inline) throw new Error("gpt-image-2: 参考画像の data URL が不正です");
-    const form = new FormData();
-    form.append("model", GPT_IMAGE_MODEL);
-    form.append("prompt", prompt);
-    form.append("size", size);
-    form.append(
-      "image",
-      new Blob([new Uint8Array(Buffer.from(inline.data, "base64"))], { type: inline.mimeType }),
-      "reference.png"
-    );
-    response = await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    });
-  } else {
-    response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+  const images = response.generatedImages ?? [];
+  if (images.length === 0 || !images[0].image?.imageBytes) {
+    throw new Error("Imagen 4: 画像データが含まれていませんでした");
+  }
+
+  return `data:image/png;base64,${images[0].image.imageBytes}`;
+}
+
+// Nano Banana (Gemini) フォールバック
+async function generateWithNanoBanana(
+  ai: GoogleGenAI,
+  prompt: string,
+  aspectRatio: string = "16:9",
+): Promise<string> {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-image",
+    contents: prompt,
+    config: {
+      responseModalities: ["IMAGE"],
+      imageConfig: {
+        aspectRatio,
       },
-      body: JSON.stringify({
-        model: GPT_IMAGE_MODEL,
-        prompt,
-        size,
-        n: 1,
-      }),
-    });
+    },
+  });
+
+  const parts = response.candidates?.[0]?.content?.parts ?? [];
+  for (const part of parts) {
+    if (part.inlineData?.data) {
+      const mimeType = part.inlineData.mimeType || "image/png";
+      return `data:${mimeType};base64,${part.inlineData.data}`;
+    }
   }
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`gpt-image-2: ${response.status} ${response.statusText} - ${errorBody}`);
-  }
-
-  const data = await response.json();
-  const b64 = data.data?.[0]?.b64_json;
-  if (!b64) {
-    throw new Error("gpt-image-2: 画像データが含まれていませんでした");
-  }
-
-  return `data:image/png;base64,${b64}`;
+  throw new Error("Nano Banana: 画像データが含まれていませんでした");
 }
 
 // ---------- 媒体別生成 ----------
 
 // 1媒体分（3バリエーション）を生成してリサイズ・圧縮
 async function generateForPlatform(
+  ai: GoogleGenAI,
   request: ThumbnailGenerationRequest,
   platform: keyof typeof PLATFORM_IMAGE_CONFIG,
 ): Promise<{ urls: string[]; allSuccess: boolean }> {
@@ -329,11 +314,11 @@ async function generateForPlatform(
   }
 
   const variantPrompts = [prompts.corporate, prompts.warm, prompts.dynamic];
-  const referenceImage = request.referenceImage || null;
 
+  // Imagen 4 で試行
   const results = await Promise.allSettled(
     variantPrompts.map((prompt) =>
-      generateWithGptImage(prompt, config.aspectRatio, referenceImage)
+      generateWithImagen4(ai, prompt, config.aspectRatio)
     )
   );
 
@@ -344,17 +329,17 @@ async function generateForPlatform(
     if (results[i].status === "fulfilled") {
       urls.push((results[i] as PromiseFulfilledResult<string>).value);
     } else {
-      console.error(`[gpt-image] ${platform}/${variants[i]} failed:`, (results[i] as PromiseRejectedResult).reason);
+      console.error(`[imagen4] ${platform}/${variants[i]} failed:`, (results[i] as PromiseRejectedResult).reason);
       failedIndices.push(i);
     }
   }
 
-  // 失敗分を1回だけリトライ（一時的なレート制限・5xx対策）
+  // 失敗分を Nano Banana でフォールバック
   if (failedIndices.length > 0) {
-    console.log(`[gpt-image] ${platform}: ${failedIndices.length}枚失敗。リトライ...`);
+    console.log(`[imagen4] ${platform}: ${failedIndices.length}枚失敗。Nano Banana でフォールバック...`);
     const fallbackResults = await Promise.allSettled(
       failedIndices.map((i) =>
-        generateWithGptImage(variantPrompts[i], config.aspectRatio, referenceImage)
+        generateWithNanoBanana(ai, variantPrompts[i], config.aspectRatio)
       )
     );
 
@@ -362,7 +347,7 @@ async function generateForPlatform(
       if (result.status === "fulfilled") {
         urls.push(result.value);
       } else {
-        console.error(`[gpt-image] ${platform} retry also failed:`, result.reason);
+        console.error(`[fallback] ${platform} Nano Banana also failed:`, result.reason);
       }
     }
   }
@@ -384,7 +369,7 @@ export async function generatePlatformThumbnails(
   const apiKey = getApiKey();
 
   if (!apiKey) {
-    console.log("[gpt-image] OPENAI_API_KEY未設定。プレースホルダーを使用します。");
+    console.log("[imagen4] GEMINI_API_KEY未設定。プレースホルダーを使用します。");
     return {
       thumbnails: {
         indeed: makePlaceholders(800, 600),
@@ -393,14 +378,16 @@ export async function generatePlatformThumbnails(
         hellowork: [],
       },
       status: "placeholder",
-      message: "OPENAI_API_KEY未設定のためプレースホルダー画像を使用しています",
+      message: "GEMINI_API_KEY未設定のためプレースホルダー画像を使用しています",
     };
   }
 
+  const ai = new GoogleGenAI({ apiKey });
+
   const [indeedResult, airworkResult, jobmedleyResult] = await Promise.all([
-    generateForPlatform(request, "indeed"),
-    generateForPlatform(request, "airwork"),
-    generateForPlatform(request, "jobmedley"),
+    generateForPlatform(ai, request, "indeed"),
+    generateForPlatform(ai, request, "airwork"),
+    generateForPlatform(ai, request, "jobmedley"),
   ]);
 
   const totalGenerated =
@@ -421,7 +408,7 @@ export async function generatePlatformThumbnails(
 
   const allSuccess =
     indeedResult.allSuccess && airworkResult.allSuccess && jobmedleyResult.allSuccess;
-  const model = allSuccess ? "gpt-image-2" : "gpt-image-2 (一部リトライ)";
+  const model = allSuccess ? "Imagen 4" : "Imagen 4 + Nano Banana fallback";
 
   return {
     thumbnails: {
@@ -443,7 +430,7 @@ export async function generatePlatformThumbnailsSingle(
   const apiKey = getApiKey();
 
   if (!apiKey) {
-    console.log("[gpt-image] OPENAI_API_KEY未設定。プレースホルダーを使用します。");
+    console.log("[imagen4] GEMINI_API_KEY未設定。プレースホルダーを使用します。");
     const config = PLATFORM_IMAGE_CONFIG[platform];
     return {
       thumbnails: {
@@ -453,11 +440,12 @@ export async function generatePlatformThumbnailsSingle(
         hellowork: [],
       },
       status: "placeholder",
-      message: "OPENAI_API_KEY未設定のためプレースホルダー画像を使用しています",
+      message: "GEMINI_API_KEY未設定のためプレースホルダー画像を使用しています",
     };
   }
 
-  const result = await generateForPlatform(request, platform);
+  const ai = new GoogleGenAI({ apiKey });
+  const result = await generateForPlatform(ai, request, platform);
 
   if (result.urls.length === 0) {
     const config = PLATFORM_IMAGE_CONFIG[platform];
@@ -501,60 +489,56 @@ export async function generateThumbnails(
   };
 }
 
-// ---------- サムネイル単体再生成（サムネイルスタジオ機能） ----------
-
-export type ThumbnailPlatform = keyof typeof PLATFORM_IMAGE_CONFIG;
-
-export interface RegenerateThumbnailsRequest {
-  prompt: string;
-  platform: ThumbnailPlatform;
-  referenceImage?: string | null; // data URL
-  count?: number; // 1〜3
-}
-
-export interface RegenerateThumbnailsResponse {
-  urls: string[]; // base64 data URLs（媒体サイズに圧縮済み）
-  status: "success" | "error";
-  message: string;
-}
-
-// プロンプト＋参考画像から指定媒体のサムネイルを再生成
-// レート制限(429)回避のため逐次実行＋1秒間隔
-export async function regenerateThumbnails(
-  request: RegenerateThumbnailsRequest
-): Promise<RegenerateThumbnailsResponse> {
+// Pro版 (gemini-3-pro-image-preview = Nano Banana Pro) で高品質生成
+export async function generateThumbnailsPro(
+  request: ThumbnailGenerationRequest
+): Promise<ThumbnailGenerationResponse> {
   const apiKey = getApiKey();
+
   if (!apiKey) {
-    return { urls: [], status: "error", message: "OPENAI_API_KEY未設定のため生成できません" };
+    return {
+      urls: PLACEHOLDER_THUMBNAILS,
+      status: "placeholder",
+      message: "GEMINI_API_KEY未設定",
+    };
   }
 
-  const config = PLATFORM_IMAGE_CONFIG[request.platform];
-  const count = Math.min(Math.max(Math.floor(request.count ?? 1), 1), 3);
-  const referenceImage = request.referenceImage || null;
+  const ai = new GoogleGenAI({ apiKey });
 
-  const urls: string[] = [];
-  for (let i = 0; i < count; i++) {
-    if (i > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  try {
+    const prompt = buildFallbackPrompt(request, "corporate");
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: prompt,
+      config: {
+        responseModalities: ["IMAGE"],
+        imageConfig: {
+          aspectRatio: "16:9",
+          imageSize: "2K",
+        },
+      },
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts ?? [];
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mimeType = part.inlineData.mimeType || "image/png";
+        const dataUrl = `data:${mimeType};base64,${part.inlineData.data}`;
+        return {
+          urls: [dataUrl],
+          status: "success",
+          message: "高品質サムネイルを生成しました（Nano Banana Pro / gemini-3-pro-image-preview）",
+        };
+      }
     }
-    try {
-      const dataUrl = await generateWithGptImage(
-        request.prompt, config.aspectRatio, referenceImage
-      );
-      urls.push(await compressImage(dataUrl, config.width, config.height));
-    } catch (error) {
-      console.error(`[regenerate] ${request.platform} ${i + 1}枚目失敗:`, error);
-    }
-  }
 
-  if (urls.length === 0) {
-    return { urls: [], status: "error", message: "サムネイル生成に失敗しました" };
+    throw new Error("画像データが含まれていませんでした");
+  } catch (error) {
+    console.error("[nanobanana pro] Error:", error);
+    return {
+      urls: PLACEHOLDER_THUMBNAILS,
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    };
   }
-
-  return {
-    urls,
-    status: "success",
-    message: `${urls.length}枚のサムネイルを生成しました`,
-  };
 }
-

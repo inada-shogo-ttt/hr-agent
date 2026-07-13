@@ -51,6 +51,7 @@ export async function runThumbnailGenerationAgent(
       colorScheme: "professional",
       style: "recruitment",
       visualStyle,
+      referenceImage: jobPostingInput.thumbnailReference || null,
     });
 
     return {

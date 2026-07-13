@@ -158,12 +158,20 @@ ${posting.selectionProcess}${posting.staffVoice ? `\n\n【職員の声】\n${pos
         </Button>
       </div>
 
-      {urls.length > 0 && (
+      {(urls.length > 0 || (editable && jobId)) && (
         <div>
           <h3 className="text-sm font-medium text-gray-700 mb-2">
             サムネイル（{urls.length}枚）
           </h3>
-          <ThumbnailPreview urls={urls} filenamePrefix="jobmedley_thumbnail" editable={editable} jobId={jobId} platform="jobmedley" onUrlsChange={onThumbnailsChange} />
+          <ThumbnailPreview
+            urls={urls}
+            filenamePrefix="jobmedley_thumbnail"
+            editable={editable}
+            jobId={jobId}
+            platform="jobmedley"
+            regeneratePrompt={`医療・介護系求人サイト用のバナー画像。「${posting.appealTitle}」の雰囲気を伝える、実際の職場で20〜30代のスタッフ2〜3名が働くリアルで自然なシーン。自然光ベースの明るい照明、プロフェッショナルで清潔感のある構図。画像内にテキスト・ロゴ・文字は一切含めないこと。`}
+            onUrlsChange={onThumbnailsChange}
+          />
         </div>
       )}
 
