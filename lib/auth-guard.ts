@@ -16,13 +16,14 @@ export async function getAuthUser(): Promise<AppUser | null> {
     .eq("id", user.id)
     .single();
 
-  if (!profile) return null;
+  if (!profile || !profile.orgId) return null;
 
   return {
     id: profile.id,
     email: profile.email,
     name: profile.name,
     role: profile.role as UserRole,
+    orgId: profile.orgId,
   };
 }
 

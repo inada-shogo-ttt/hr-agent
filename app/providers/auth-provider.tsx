@@ -57,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: profile.email,
         name: profile.name,
         role: profile.role,
+        orgId: profile.orgId,
       });
     } else {
       setUser(null);

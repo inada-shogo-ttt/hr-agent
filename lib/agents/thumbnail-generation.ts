@@ -1,4 +1,5 @@
 import { generatePlatformThumbnails, PlatformThumbnails } from "@/lib/nanobanana";
+import { selectCompositionRefsForJob } from "@/lib/reference-thumbnails";
 import { ThumbnailGenerationInput, ThumbnailGenerationOutput, VisualStyle } from "./types";
 
 // 業種に基づいてビジュアルスタイル情報を生成
@@ -39,20 +40,42 @@ export async function runThumbnailGenerationAgent(
 ): Promise<ThumbnailGenerationOutput> {
   const { jobPostingInput, manuscript } = input;
   const { common } = jobPostingInput;
+  const targets = input.platforms ?? ["indeed", "airwork", "jobmedley"];
 
   const visualStyle = deriveVisualStyle(common.industry, common.jobTitle);
 
+  // サムネイル対象媒体が選択されていない場合は生成をスキップ
+  if (targets.length === 0) {
+    return {
+      platformThumbnails: { indeed: [], airwork: [], jobmedley: [], hellowork: [] },
+      thumbnailUrls: [],
+      generationStatus: "success",
+      message: "サムネイル対象の媒体が選択されていないため、生成をスキップしました",
+      visualStyle,
+    };
+  }
+
   try {
+    // 参考サムネ（構図参考）: Indeed 生成時のみ、登録済み事例から AI が1枚を自動選定
+    const compositionRefs = targets.includes("indeed")
+      ? await selectCompositionRefsForJob({
+          jobTitle: manuscript.indeed?.jobTitle || common.jobTitle,
+          industry: common.industry,
+          catchphrase: manuscript.indeed?.catchphrase || common.appealPoints || "",
+        })
+      : undefined;
+
     const result = await generatePlatformThumbnails({
-      title: manuscript.indeed.jobTitle,
-      catchphrase: manuscript.indeed.catchphrase,
+      title: manuscript.indeed?.jobTitle || common.jobTitle,
+      catchphrase: manuscript.indeed?.catchphrase || common.appealPoints || "",
       companyName: common.companyName,
       industry: common.industry,
       colorScheme: "professional",
       style: "recruitment",
       visualStyle,
       referenceImage: jobPostingInput.thumbnailReference || null,
-    });
+      compositionRefs,
+    }, targets);
 
     return {
       platformThumbnails: result.thumbnails,
@@ -67,23 +90,20 @@ export async function runThumbnailGenerationAgent(
     };
   } catch (error) {
     console.error("[thumbnail-generation] Error:", error);
-    const placeholders = [
-      "https://placehold.co/800x600/0066cc/ffffff?text=サムネイル1",
-      "https://placehold.co/800x600/003399/ffffff?text=サムネイル2",
-      "https://placehold.co/800x600/0099ff/ffffff?text=サムネイル3",
+    const makePlaceholders = (w: number, h: number) => [
+      `https://placehold.co/${w}x${h}/0066cc/ffffff?text=サムネイル1`,
+      `https://placehold.co/${w}x${h}/003399/ffffff?text=サムネイル2`,
+      `https://placehold.co/${w}x${h}/0099ff/ffffff?text=サムネイル3`,
     ];
+    const placeholders = makePlaceholders(800, 600);
     return {
       platformThumbnails: {
-        indeed: placeholders,
-        airwork: placeholders,
-        jobmedley: [
-          "https://placehold.co/1024x576/0066cc/ffffff?text=サムネイル1",
-          "https://placehold.co/1024x576/003399/ffffff?text=サムネイル2",
-          "https://placehold.co/1024x576/0099ff/ffffff?text=サムネイル3",
-        ],
+        indeed: targets.includes("indeed") ? placeholders : [],
+        airwork: targets.includes("airwork") ? placeholders : [],
+        jobmedley: targets.includes("jobmedley") ? makePlaceholders(1024, 576) : [],
         hellowork: [],
       },
-      thumbnailUrls: placeholders,
+      thumbnailUrls: targets.includes("indeed") || targets.includes("airwork") ? placeholders : [],
       generationStatus: "placeholder",
       message: "API未設定のため、プレースホルダー画像を使用しています",
       visualStyle,

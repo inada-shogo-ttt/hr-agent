@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth-guard";
+import { getOwnedJob } from "@/lib/org-scope";
 import { AllPlatformPostings } from "@/types/platform";
 
 type PlatformKey = "indeed" | "airwork" | "jobmedley" | "hellowork";
@@ -61,7 +63,13 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   const { id } = await params;
+
+  const owned = await getOwnedJob(id, auth.user, "read");
+  if ("error" in owned) return owned.error;
 
   const { data: records, error } = await supabase
     .from("JobRecord")

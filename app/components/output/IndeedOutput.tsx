@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Copy, Check, Pencil } from "lucide-react";
 import { useState } from "react";
 import { ThumbnailPreview } from "./ThumbnailPreview";
+import { buildIndeedSlotOptions } from "@/lib/thumbnail-prompts";
 
 interface IndeedOutputProps {
   posting: IndeedPosting;
@@ -113,6 +114,67 @@ function FieldBlock({
   );
 }
 
+// 原稿（jobDescription）はプロンプトのテンプレート（見出し・記号・区切り線）を
+// 完成形のまま保持しているため、加工せずそのまま表示・編集する。
+function ManuscriptBlock({
+  posting,
+  editable,
+  onFieldChange,
+}: {
+  posting: IndeedPosting;
+  editable?: boolean;
+  onFieldChange?: (field: string, value: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const value = posting.jobDescription;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-700">原稿</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{value.length}文字</span>
+          {editable && !isEditing && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditing(true)}
+              className="h-6 px-2 text-xs"
+            >
+              <Pencil className="w-3 h-3 mr-1" />
+              編集
+            </Button>
+          )}
+          <CopyButton text={value} label="コピー" />
+        </div>
+      </div>
+      {isEditing && editable ? (
+        <div className="space-y-1">
+          <textarea
+            className="w-full border rounded-md p-3 text-sm min-h-[360px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={value}
+            onChange={(e) => onFieldChange?.("jobDescription", e.target.value)}
+          />
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(false)}
+              className="text-xs"
+            >
+              閉じる
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gray-50 border rounded-md p-3 text-sm whitespace-pre-wrap">
+          {value}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function IndeedOutput({ posting, thumbnailUrls, editable, onFieldChange, onThumbnailsChange, jobId }: IndeedOutputProps) {
   const copyAll = async () => {
     const featureTagsLine = posting.featureTags?.length
@@ -130,14 +192,8 @@ ${posting.jobTitle}
 【キャッチコピー】
 ${posting.catchphrase}
 
-【仕事内容】
+【原稿】
 ${posting.jobDescription}
-
-【アピールポイント】
-${posting.appealPoints}
-
-【求める人材】
-${posting.requirements}
 
 【給与】
 ${posting.salary}${posting.salaryDisplayType ? `（表示方法：${posting.salaryDisplayType}）` : ""}
@@ -145,17 +201,8 @@ ${posting.fixedOvertimePay ? `固定残業代：${posting.fixedOvertimePay}\n` :
 【勤務時間】
 ${posting.workingHours}${posting.monthlyWorkingHours ? `\n${posting.monthlyWorkingHours}` : ""}
 
-【休暇・休日】
-${posting.holidays}
-
-【待遇・福利厚生】
-${posting.benefits}
-
 【社会保険】
 ${posting.socialInsurance}
-
-【アクセス】
-${posting.access}
 
 ${posting.smokingPolicy ? `【受動喫煙対策】\n${posting.smokingPolicy}\n\n` : ""}${posting.probationPeriod ? `【試用期間】\n${posting.probationPeriod}\n\n` : ""}【採用予定人数】
 ${posting.numberOfHires}
@@ -185,7 +232,11 @@ ${posting.hiringManagerName ? `\n【採用担当者】\n${posting.hiringManagerN
             editable={editable}
             jobId={jobId}
             platform="indeed"
-            regeneratePrompt={`${posting.companyName}の求人バナー画像。職種は「${posting.jobTitle}」。「${posting.catchphrase}」の雰囲気を伝える、実際の職場で20〜30代のスタッフ2〜3名が働くリアルで自然なシーン。自然光ベースの明るい照明、プロフェッショナルで清潔感のある構図。画像内にテキスト・ロゴ・文字は一切含めないこと。`}
+            regenerateSlotOptions={buildIndeedSlotOptions({
+              jobTitle: posting.jobTitle,
+              catchphrase: posting.catchphrase,
+              companyName: posting.companyName,
+            })}
             onUrlsChange={onThumbnailsChange}
           />
         </div>
@@ -219,12 +270,7 @@ ${posting.hiringManagerName ? `\n【採用担当者】\n${posting.hiringManagerN
         {posting.smokingPolicy && (
           <FieldBlock label="受動喫煙対策" value={posting.smokingPolicy} editable={editable} fieldKey="smokingPolicy" onFieldChange={onFieldChange} />
         )}
-        <FieldBlock label="仕事内容" value={posting.jobDescription} charLimit={500} editable={editable} fieldKey="jobDescription" onFieldChange={onFieldChange} />
-        <FieldBlock label="アピールポイント" value={posting.appealPoints} charLimit={300} editable={editable} fieldKey="appealPoints" onFieldChange={onFieldChange} />
-        <FieldBlock label="求める人材" value={posting.requirements} charLimit={200} editable={editable} fieldKey="requirements" onFieldChange={onFieldChange} />
-        <FieldBlock label="休暇・休日" value={posting.holidays} editable={editable} fieldKey="holidays" onFieldChange={onFieldChange} />
-        <FieldBlock label="アクセス" value={posting.access} editable={editable} fieldKey="access" onFieldChange={onFieldChange} />
-        <FieldBlock label="待遇・福利厚生" value={posting.benefits} editable={editable} fieldKey="benefits" onFieldChange={onFieldChange} />
+        <ManuscriptBlock posting={posting} editable={editable} onFieldChange={onFieldChange} />
 
         {posting.featureTags && posting.featureTags.length > 0 && (
           <div className="space-y-1">

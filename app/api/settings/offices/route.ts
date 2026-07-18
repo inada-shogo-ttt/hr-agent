@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth-guard";
+import { requireAuth, requireRole } from "@/lib/auth-guard";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const auth = await requireRole(["admin"]);
+  const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("Office")
     .select("*")
     .order("createdAt", { ascending: false });
+
+  query = query.eq("orgId", auth.user.orgId);
+
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -31,7 +35,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireRole(["admin"]);
+  const auth = await requireRole(["super_admin", "admin"]);
   if ("error" in auth) return auth.error;
 
   const { name, assignments } = await request.json();
@@ -42,7 +46,7 @@ export async function POST(request: NextRequest) {
   // 事業所作成
   const { data: office, error: officeError } = await supabaseAdmin
     .from("Office")
-    .insert({ name: name.trim(), createdBy: auth.user.id })
+    .insert({ name: name.trim(), orgId: auth.user.orgId, createdBy: auth.user.id })
     .select()
     .single();
 
@@ -62,6 +66,7 @@ export async function POST(request: NextRequest) {
           officeId: office.id,
           jobTypeId: assignment.jobTypeId,
           employmentTypeId,
+          orgId: auth.user.orgId,
           status: "draft",
           createdBy: auth.user.id,
           createdAt: now,

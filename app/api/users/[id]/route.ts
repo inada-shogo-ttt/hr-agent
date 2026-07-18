@@ -1,24 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth-guard";
+import { AppUser } from "@/types/auth";
 
 export const runtime = "nodejs";
 
-// PATCH /api/users/[id] — ロール変更
+// 操作対象ユーザーの取得と権限確認
+// admin は自組織のユーザーのみ操作可。最高管理者は不可視(存在も開示しない)
+async function getManageableUser(
+  id: string,
+  actor: AppUser
+): Promise<
+  | { target: { id: string; role: string; orgId: string } }
+  | { error: NextResponse }
+> {
+  const { data: target } = await supabaseAdmin
+    .from("User")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  const allowed =
+    target &&
+    (actor.role === "super_admin" ||
+      (target.orgId === actor.orgId && target.role !== "super_admin"));
+
+  if (!allowed) {
+    return {
+      error: NextResponse.json(
+        { error: "ユーザーが見つかりません" },
+        { status: 404 }
+      ),
+    };
+  }
+  return { target };
+}
+
+// PATCH /api/users/[id] — 名前・ロール変更
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(["admin"]);
+  const auth = await requireRole(["super_admin", "admin"]);
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
+  const found = await getManageableUser(id, auth.user);
+  if ("error" in found) return found.error;
+
   const body = await request.json();
   const { role, name } = body;
 
   const updates: Record<string, string> = {};
   if (role) {
-    const validRoles = ["admin", "editor", "reviewer", "publisher"];
+    const validRoles =
+      auth.user.role === "super_admin"
+        ? ["super_admin", "admin", "member"]
+        : ["admin", "member"];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: "無効なロールです" }, { status: 400 });
     }
@@ -54,7 +92,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(["admin"]);
+  const auth = await requireRole(["super_admin", "admin"]);
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
@@ -66,6 +104,9 @@ export async function DELETE(
       { status: 400 }
     );
   }
+
+  const found = await getManageableUser(id, auth.user);
+  if ("error" in found) return found.error;
 
   // User テーブルから削除（auth.users は CASCADE で削除される）
   await supabaseAdmin.auth.admin.deleteUser(id);

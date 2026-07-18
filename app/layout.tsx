@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Zen_Kaku_Gothic_New, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppHeader } from "@/app/components/AppHeader";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/app/providers/auth-provider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Airbnb Cereal VF の代替: 欧文 = Plus Jakarta Sans / 和文 = Zen Kaku Gothic New
+const jakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const zenKakuGothic = Zen_Kaku_Gothic_New({
+  variable: "--font-zen-kaku",
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -16,8 +24,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "採用エージェント — 求人原稿自動生成",
-  description: "Indeed・AirWork・JobMedley対応の求人原稿をAIが自動生成します",
+  title: "採用エージェント — 伝わる求人は、つくれる。",
+  description: "求人原稿の作成から媒体別最適化、掲載後の改善まで。採用業務をひとつの流れで進めるAIパートナーです。",
 };
 
 export default function RootLayout({
@@ -28,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${jakartaSans.variable} ${zenKakuGothic.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
         <AuthProvider>

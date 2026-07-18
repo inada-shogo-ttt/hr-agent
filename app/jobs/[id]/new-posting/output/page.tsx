@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { RefreshCw, Clock, Save, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export default function JobOutputPage() {
   const router = useRouter();
@@ -20,6 +21,12 @@ export default function JobOutputPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestOutputRef = useRef<AllPlatformPostings | null>(null);
+
+  // デバウンスタイマー発火時に常に最新の recordId を参照する（stale closure 対策）
+  const recordIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    recordIdRef.current = recordId;
+  }, [recordId]);
 
   // DB から最新レコードを取得するフォールバック
   async function loadFromDB(): Promise<{ output: AllPlatformPostings; recordId: string } | null> {
@@ -70,7 +77,15 @@ export default function JobOutputPage() {
         return;
       }
 
+      // 出力はあるが recordId が無い場合も DB から解決する
+      // （recordId が無いと自動保存が黙ってスキップされてしまうため）
+      if (!rid) {
+        const dbData = await loadFromDB();
+        if (dbData) rid = dbData.recordId;
+      }
+
       if (rid) setRecordId(rid);
+      else toast.error("保存先レコードが見つかりません。編集内容は保存されない可能性があります。");
 
       // サムネイルURLはSupabase StorageのURLとして出力データ内に含まれている
       setOutput({ ...parsed });
@@ -82,10 +97,14 @@ export default function JobOutputPage() {
 
   // 自動保存（2秒デバウンス）
   const autoSave = useCallback(async (data: AllPlatformPostings) => {
-    if (!recordId) return;
+    const rid = recordIdRef.current;
+    if (!rid) {
+      toast.error("保存先レコードが見つからないため保存できません");
+      return;
+    }
     setSaveStatus("saving");
     try {
-      const res = await fetch(`/api/jobs/${jobId}/records/${recordId}`, {
+      const res = await fetch(`/api/jobs/${jobId}/records/${rid}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ outputData: data }),
@@ -94,12 +113,14 @@ export default function JobOutputPage() {
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 2000);
       } else {
+        toast.error("自動保存に失敗しました。「保存」ボタンで再試行してください。");
         setSaveStatus("idle");
       }
     } catch {
+      toast.error("自動保存に失敗しました。「保存」ボタンで再試行してください。");
       setSaveStatus("idle");
     }
-  }, [jobId, recordId]);
+  }, [jobId]);
 
   function handleOutputChange(newOutput: AllPlatformPostings) {
     setEditedOutput(newOutput);
@@ -123,7 +144,7 @@ export default function JobOutputPage() {
 
   if (!output || !editedOutput) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+      <main className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
           読み込み中...
@@ -133,16 +154,26 @@ export default function JobOutputPage() {
   }
 
   const generatedAt = new Date(output.generatedAt).toLocaleString("ja-JP");
+  const platformCount = [output.indeed, output.airwork, output.jobmedley, output.hellowork].filter(
+    Boolean
+  ).length;
+  const thumbnailSummary = [
+    editedOutput.indeed && `インディード ${editedOutput.indeed.thumbnailUrls?.length ?? 0}枚`,
+    editedOutput.airwork && `エアワーク ${editedOutput.airwork.thumbnailUrls?.length ?? 0}枚`,
+    editedOutput.jobmedley && `ジョブメドレー ${editedOutput.jobmedley.thumbnailUrls?.length ?? 0}枚`,
+  ]
+    .filter(Boolean)
+    .join(" / ");
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold">求人原稿 完成</h1>
               <Badge className="bg-green-100 text-green-700 border-green-200">
-                4媒体対応
+                {platformCount}媒体対応
               </Badge>
             </div>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -184,15 +215,17 @@ export default function JobOutputPage() {
           </div>
         </div>
 
-        <Card className="mb-6 bg-blue-50 border-blue-200">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-blue-700 font-medium">
-                サムネイル画像: インディード {editedOutput.indeed?.thumbnailUrls?.length ?? 0}枚 / エアワーク {editedOutput.airwork?.thumbnailUrls?.length ?? 0}枚 / ジョブメドレー {editedOutput.jobmedley?.thumbnailUrls?.length ?? 0}枚
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+        {thumbnailSummary && (
+          <Card className="mb-6 bg-blue-50 border-blue-200">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-blue-700 font-medium">
+                  サムネイル画像: {thumbnailSummary}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <ManuscriptOutput
           output={editedOutput}

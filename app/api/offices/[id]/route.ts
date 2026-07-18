@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth-guard";
+import { canReadOrg } from "@/lib/org-scope";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ export async function GET(
     .eq("id", id)
     .single();
 
-  if (officeError || !office) {
+  if (officeError || !office || !canReadOrg(auth.user, office.orgId)) {
     return NextResponse.json({ error: "事業所が見つかりません" }, { status: 404 });
   }
 

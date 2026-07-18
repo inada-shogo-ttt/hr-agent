@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root { --ink:#17212b; --paper:#f7f6f2; --line:#d9d8d0; --coral:#ef5b52; --mint:#b9dfd1; --violet:#6856a5; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:"Hiragino Sans","Yu Gothic",sans-serif; }
+    main { max-width:1280px; margin:0 auto; padding:48px 32px 72px; }
+    h1 { font-family:Georgia,"Times New Roman","Yu Mincho",serif; letter-spacing:-.04em; font-size:clamp(30px,4vw,52px); margin:0 0 10px; }
+    .lead { color:#55606a; line-height:1.75; margin:0 0 34px; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; }
+    .card { border:1px solid var(--line); background:white; box-shadow:0 10px 30px rgba(24,32,40,.05); cursor:pointer; overflow:hidden; transition:.2s ease; }
+    .card:hover,.card.selected { transform:translateY(-4px); border-color:var(--ink); box-shadow:0 18px 42px rgba(24,32,40,.12); }
+    .mock { height:310px; padding:19px; position:relative; overflow:hidden; }
+    .card-body { padding:19px 20px 22px; border-top:1px solid var(--line); }
+    .eyebrow { font-size:11px; letter-spacing:.14em; font-weight:700; margin:0 0 8px; color:#68737d; }
+    h2 { font-size:20px; margin:0 0 8px; letter-spacing:-.03em; }
+    .card-body p { margin:0; color:#66717b; line-height:1.65; font-size:13px; }
+    .a { background:#f4f1e9; }
+    .a .nav { font-size:9px; letter-spacing:.08em; display:flex; justify-content:space-between; }
+    .a .hero { margin-top:51px; }
+    .a .hero h3 { font:800 35px/1.05 Georgia,"Yu Mincho",serif; margin:0; letter-spacing:-.05em; max-width:285px; }
+    .a .hero p { font-size:10px; line-height:1.7; color:#58636c; max-width:225px; margin-top:16px; }
+    .a .button { display:inline-block; margin-top:18px; padding:10px 13px; background:var(--ink); color:white; font-size:10px; }
+    .a .paper { position:absolute; right:-6px; bottom:-14px; width:158px; height:195px; transform:rotate(7deg); background:white; border:1px solid #d3d1c8; padding:14px; box-shadow:0 9px 24px rgba(0,0,0,.1); }
+    .a .paper b { font-size:11px; } .a .line { height:4px; background:#deded7; margin-top:9px; } .a .line.short { width:62%; }
+    .b { background:#17212b; color:white; }
+    .b .nav { display:flex; justify-content:space-between; font-size:9px; color:#d3d7da; }
+    .b .tag { margin-top:35px; display:inline-block; padding:5px 8px; border:1px solid #83b9a8; color:#b9dfd1; font-size:8px; letter-spacing:.1em; }
+    .b h3 { font:800 32px/1.1 Georgia,"Yu Mincho",serif; letter-spacing:-.05em; margin:13px 0 0; max-width:310px; }
+    .b .bar { position:absolute; bottom:30px; left:19px; right:19px; display:grid; grid-template-columns:1.5fr 1fr 1fr; gap:6px; }
+    .b .bar div { height:58px; padding:9px; background:#24313d; color:#c6d2d5; font-size:8px; } .b .bar div:first-child{ background:var(--mint); color:#183238; }
+    .c { background:#fff; }
+    .c .nav { display:flex; justify-content:space-between; font-size:9px; padding-bottom:12px; border-bottom:1px solid #eee; }
+    .c .headline { margin-top:32px; display:grid; grid-template-columns:1.1fr .9fr; gap:13px; align-items:end; }
+    .c h3 { margin:0; font-size:28px; line-height:1.18; letter-spacing:-.06em; }
+    .c .accent { height:103px; background:var(--coral); position:relative; } .c .accent:after { content:"01"; color:#ffd5d2; font:700 62px/1 Georgia; position:absolute; right:6px; bottom:-5px; }
+    .c .copy { margin-top:18px; font-size:10px; line-height:1.7; color:#58636c; width:65%; }
+    .c .cta { position:absolute; left:19px; bottom:24px; font-size:10px; font-weight:700; color:var(--coral); border-bottom:1px solid var(--coral); padding-bottom:3px; }
+    @media (max-width:860px){ .grid{grid-template-columns:1fr;} .mock{height:300px;} }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">SAIYO AGENT / VISUAL DIRECTION</p>
+    <h1>どの第一印象で、<br>採用担当者を迎えるか。</h1>
+    <p class="lead">新規顧客向けLPの方向性です。クリックして、いちばん近い案を選んでください。</p>
+    <div class="grid">
+      <article class="card" data-choice="editorial" onclick="toggleSelect(this)">
+        <div class="mock a"><div class="nav"><b>採用エージェント</b><span>機能　導入効果　ログイン</span></div><div class="hero"><h3>求人原稿を、<br>採用の武器に。</h3><p>媒体別の最適化から改善まで。採用業務を静かに、確実に前へ進める。</p><span class="button">原稿を作成する →</span></div><div class="paper"><b>介護スタッフ</b><div class="line"></div><div class="line short"></div><div class="line"></div><div class="line short"></div></div></div>
+        <div class="card-body"><p class="eyebrow">A / Editorial</p><h2>静かな信頼感</h2><p>余白と実際の原稿を主役にする、上質で落ち着いた業務ツールの印象です。</p></div>
+      </article>
+      <article class="card" data-choice="command-center" onclick="toggleSelect(this)">
+        <div class="mock b"><div class="nav"><b>採用エージェント</b><span>ログイン</span></div><span class="tag">RECRUITING OPERATIONS</span><h3>採用活動を、<br>次の一手まで設計する。</h3><div class="bar"><div>媒体別に原稿を生成<br><b>4 Platforms</b></div><div>改善履歴<br><b>Always learning</b></div><div>確認工程<br><b>Fact checked</b></div></div></div>
+        <div class="card-body"><p class="eyebrow">B / Command center</p><h2>成果と仕組みを明快に</h2><p>経営・マネジメント層にも伝わる、採用オペレーション基盤としての強さを出します。</p></div>
+      </article>
+      <article class="card" data-choice="publication" onclick="toggleSelect(this)">
+        <div class="mock c"><div class="nav"><b>採用エージェント</b><span>機能　事例　ログイン</span></div><div class="headline"><h3>「伝わる求人」は、つくれる。</h3><div class="accent"></div></div><p class="copy">事業所と職種を入力。原稿の作成、媒体別の最適化、掲載後の改善まで。</p><span class="cta">出力サンプルを見る →</span></div>
+        <div class="card-body"><p class="eyebrow">C / Publication</p><h2>前向きで親しみやすい</h2><p>求人原稿そのものの魅力と、使い始めやすさを最も直感的に伝える方向です。</p></div>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

@@ -32,6 +32,7 @@ export interface TeamBMemoryEntry {
 }
 
 export interface MemorySearchParams {
+  orgId: string;
   platform: Platform;
   categories?: string[];
   industry?: string;
@@ -39,6 +40,7 @@ export interface MemorySearchParams {
 }
 
 export interface MemorySaveParams {
+  orgId: string;
   platform: Platform;
   improvements: ImprovementDiff[];
   issues: IssueSummary[];
@@ -56,11 +58,12 @@ export interface MemorySaveParams {
 export async function searchMemories(
   params: MemorySearchParams
 ): Promise<TeamBMemoryEntry[]> {
-  const { platform, categories, industry, limit = 10 } = params;
+  const { orgId, platform, categories, industry, limit = 10 } = params;
 
   let query = supabase
     .from("TeamBMemory")
     .select("*")
+    .eq("orgId", orgId)
     .eq("platform", platform)
     .order("effectiveness_score", { ascending: false })
     .order("usage_count", { ascending: false })
@@ -127,7 +130,7 @@ export async function getFormattedMemories(
 export async function saveMemories(
   params: MemorySaveParams
 ): Promise<number> {
-  const { platform, improvements, issues, sourceJobId, industry, jobType } =
+  const { orgId, platform, improvements, issues, sourceJobId, industry, jobType } =
     params;
 
   let savedCount = 0;
@@ -143,6 +146,7 @@ export async function saveMemories(
     const { data: existing } = await supabase
       .from("TeamBMemory")
       .select("id, usage_count")
+      .eq("orgId", orgId)
       .eq("platform", platform)
       .eq("category", category)
       .ilike("pattern", `%${pattern.slice(0, 20)}%`)
@@ -160,6 +164,7 @@ export async function saveMemories(
     } else {
       // 新規パターンとして保存
       const { error } = await supabase.from("TeamBMemory").insert({
+        orgId,
         platform,
         category,
         pattern,
@@ -185,6 +190,7 @@ export async function saveMemories(
     const { data: existing } = await supabase
       .from("TeamBMemory")
       .select("id, usage_count")
+      .eq("orgId", orgId)
       .eq("platform", platform)
       .eq("category", issue.category)
       .ilike("pattern", `%${issue.recommendation.slice(0, 20)}%`)
@@ -200,6 +206,7 @@ export async function saveMemories(
         .eq("id", existing[0].id);
     } else {
       const { error } = await supabase.from("TeamBMemory").insert({
+        orgId,
         platform,
         category: issue.category,
         pattern: issue.recommendation,
@@ -229,6 +236,7 @@ export async function saveMemories(
  * 前回と今回のメトリクスを比較して、関連パターンのスコアを調整
  */
 export async function updateEffectiveness(
+  orgId: string,
   platform: Platform,
   categories: string[],
   improved: boolean
@@ -238,6 +246,7 @@ export async function updateEffectiveness(
   const { data: memories } = await supabase
     .from("TeamBMemory")
     .select("id, effectiveness_score, success_count")
+    .eq("orgId", orgId)
     .eq("platform", platform)
     .in("category", categories)
     .order("updatedAt", { ascending: false })

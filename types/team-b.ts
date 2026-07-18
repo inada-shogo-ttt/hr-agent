@@ -15,6 +15,12 @@ export interface IndeedMetrics {
   cpc?: number;
   applicationStartRate?: number;
   applicationCompleteRate?: number;
+  // 掲載期間(YYYY-MM-DD)。日数・日額費用・応募単価は入力から自動算出
+  postingStartDate?: string;
+  postingEndDate?: string;
+  postingDays?: number;
+  dailyCost?: number; // 日額費用 = 合計費用 ÷ 掲載日数
+  cpa?: number; // 応募単価 = 合計費用 ÷ 応募数
 }
 
 export interface AirWorkMetrics {
@@ -138,6 +144,8 @@ export interface TeamBInput {
   existingPosting: ExistingPostingFields;
   metrics?: IndeedMetrics | AirWorkMetrics;
   thumbnailUrls?: string[];
+  // サムネイルを再生成するか(未指定は true = 従来挙動)
+  generateThumbnails?: boolean;
 }
 
 // 改善差分型
@@ -177,5 +185,7 @@ export interface TeamBOutput {
   thumbnailUrls: string[];
   platformThumbnails?: PlatformThumbnails;
   budgetRecommendation?: BudgetRecommendation;
+  // この改善にかかった API 利用実費(円換算・概算)。lib/api-cost.ts で集計
+  apiCostYen?: number;
   generatedAt: string;
 }

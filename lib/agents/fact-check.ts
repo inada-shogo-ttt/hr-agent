@@ -30,9 +30,14 @@ async function runPlatformFactCheck(
   platform: PlatformKey,
   manuscript: Record<string, unknown>,
   commonFacts: string,
+  constraints?: string,
 ): Promise<PlatformFactCheckResult> {
   const label = PLATFORM_LABELS[platform];
   const extraRules = PLATFORM_EXTRA_RULES[platform];
+
+  const constraintsSection = constraints
+    ? `\n\n## ${label}の制約条件（この制約への違反もチェック・修正対象とする）\n${constraints}`
+    : "";
 
   const prompt = `あなたは求人原稿の専門ファクトチェッカーです。
 以下の${label}用の求人原稿を元データと照合し、誤りや誇大表現を特定・修正してください。
@@ -50,7 +55,7 @@ ${JSON.stringify(manuscript, null, 2)}
 4. 仕事内容に事実と異なる記述がないか
 5. 求める人材の条件が元データと矛盾していないか
 6. 誇大表現・違法な表現（「残業なし」という嘘の記載など）がないか
-7. 厚生労働省の求人票作成ガイドラインに準拠しているか${extraRules}
+7. 厚生労働省の求人票作成ガイドラインに準拠しているか${extraRules}${constraintsSection}
 
 以下のJSON形式のみで回答してください（説明文不要）:
 {
@@ -73,7 +78,8 @@ ${JSON.stringify(manuscript, null, 2)}
   try {
     const message = await anthropic.messages.create({
       model: FAST_MODEL,
-      max_tokens: 8192,
+      // Indeed原稿は issues と correctedManuscript に全文が2回入るため 8192 では途中切断される
+      max_tokens: 16384,
       system: "あなたはJSON生成専門のアシスタントです。指定されたJSON形式のみを出力してください。JSONの前後に説明文やマークダウンを付けないでください。",
       messages: [{ role: "user", content: prompt }],
     });
@@ -119,7 +125,7 @@ ${JSON.stringify(manuscript, null, 2)}
 }
 
 export async function runFactCheckAgent(input: FactCheckInput): Promise<FactCheckOutput> {
-  const { jobPostingInput, manuscript } = input;
+  const { jobPostingInput, manuscript, guidelines } = input;
   const { common } = jobPostingInput;
 
   const commonFacts = `会社名: ${common.companyName}
@@ -135,32 +141,33 @@ export async function runFactCheckAgent(input: FactCheckInput): Promise<FactChec
 ${common.probationPeriod ? `試用期間: ${common.probationPeriod}` : ""}
 ${common.selectionProcess ? `選考の流れ: ${common.selectionProcess}` : ""}`;
 
-  // 4媒体を並列でファクトチェック
-  const [indeedResult, airworkResult, jobmedleyResult, helloworkResult] = await Promise.all([
-    runPlatformFactCheck("indeed", manuscript.indeed as unknown as Record<string, unknown>, commonFacts),
-    runPlatformFactCheck("airwork", manuscript.airwork as unknown as Record<string, unknown>, commonFacts),
-    runPlatformFactCheck("jobmedley", manuscript.jobmedley as unknown as Record<string, unknown>, commonFacts),
-    runPlatformFactCheck("hellowork", manuscript.hellowork as unknown as Record<string, unknown>, commonFacts),
-  ]);
+  // 原稿が存在する媒体のみ並列でファクトチェック（媒体選択で生成をスキップした媒体は対象外）
+  const targetPlatforms = (Object.keys(PLATFORM_LABELS) as PlatformKey[]).filter(
+    (p) => manuscript[p]
+  );
+
+  const results = await Promise.all(
+    targetPlatforms.map((p) =>
+      runPlatformFactCheck(
+        p,
+        manuscript[p] as unknown as Record<string, unknown>,
+        commonFacts,
+        guidelines?.[p]?.constraints
+      )
+    )
+  );
 
   // 結果をマージ
-  const allIssues = [
-    ...indeedResult.issues,
-    ...airworkResult.issues,
-    ...jobmedleyResult.issues,
-    ...helloworkResult.issues,
-  ];
+  const allIssues = results.flatMap((r) => r.issues);
 
-  const isClean = indeedResult.isClean && airworkResult.isClean && jobmedleyResult.isClean && helloworkResult.isClean;
+  const isClean = results.every((r) => r.isClean);
 
-  const correctedManuscript: ManuscriptWritingOutput = {
-    indeed: indeedResult.correctedManuscript as unknown as ManuscriptWritingOutput["indeed"],
-    airwork: airworkResult.correctedManuscript as unknown as ManuscriptWritingOutput["airwork"],
-    jobmedley: jobmedleyResult.correctedManuscript as unknown as ManuscriptWritingOutput["jobmedley"],
-    hellowork: helloworkResult.correctedManuscript as unknown as ManuscriptWritingOutput["hellowork"],
-  };
+  const correctedManuscript = Object.fromEntries(
+    targetPlatforms.map((p, i) => [p, results[i].correctedManuscript])
+  ) as unknown as ManuscriptWritingOutput;
 
-  const summaries = [indeedResult.summary, airworkResult.summary, jobmedleyResult.summary, helloworkResult.summary]
+  const summaries = results
+    .map((r) => r.summary)
     .filter(Boolean)
     .join(" / ");
 

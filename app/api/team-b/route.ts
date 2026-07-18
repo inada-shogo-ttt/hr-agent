@@ -8,6 +8,11 @@ import { ReferencePostingData } from "@/types/reference";
 import { supabase } from "@/lib/supabase";
 import { getFormattedMemories, saveMemories, updateEffectiveness } from "@/lib/agents/team-b/memory";
 import { getFormattedKnowledge } from "@/lib/shared-knowledge";
+import { getPlatformGuidelines } from "@/lib/platform-guidelines";
+import { startCostTracking, getTrackedCostYen } from "@/lib/api-cost";
+import { requireAuth } from "@/lib/auth-guard";
+import { getOrganization, canRunAgents, recordUsage } from "@/lib/billing/usage";
+import { settlePendingOverages } from "@/lib/billing/overage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -37,7 +42,38 @@ interface TeamBRequestBody extends TeamBInput {
   };
 }
 
+function sseErrorResponse(message: string, code: string): Response {
+  const event: TeamBSSEEvent = {
+    type: "workflow_error",
+    agentId: "tb-text-improvement",
+    message,
+    data: { code },
+    timestamp: new Date().toISOString(),
+  };
+  return new Response(createSSEMessage(event), {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
+  const org = await getOrganization(auth.user.orgId);
+  if (!org) {
+    return sseErrorResponse("組織情報が見つかりません", "org_not_found");
+  }
+  if (!canRunAgents(org)) {
+    return sseErrorResponse(
+      "プラン契約が必要です。設定 > プランからご契約ください",
+      "subscription_required"
+    );
+  }
+
   const body = await request.json();
   const input = body as TeamBRequestBody;
   const historyContext = input.historyContext;
@@ -77,11 +113,17 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        // DB から参考原稿を取得（職種・業種でスマートマッチング）
+        // API 利用実費の集計を開始(このリクエスト内の Claude / 画像生成呼び出しが対象)
+        startCostTracking();
+
+        // 媒体別ガイドライン（システム設定）をロード。DB未保存・取得失敗時はコード内デフォルト
+        const guidelines = await getPlatformGuidelines([input.platform]);
+
+        // DB からシステム参考原稿を取得（職種・業種でスマートマッチング）
         let userReferences: ReferencePostingData[] = [];
         try {
           let query = supabase
-            .from("ReferencePosting")
+            .from("SystemReferencePosting")
             .select("*")
             .order("createdAt", { ascending: false });
 
@@ -94,7 +136,7 @@ export async function POST(request: NextRequest) {
 
           if (allRefs.length < 3) {
             const { data: fallbackRefs } = await supabase
-              .from("ReferencePosting")
+              .from("SystemReferencePosting")
               .select("*")
               .order("createdAt", { ascending: false })
               .limit(5);
@@ -137,6 +179,7 @@ export async function POST(request: NextRequest) {
         let crossJobMemory = "";
         try {
           crossJobMemory = await getFormattedMemories({
+            orgId: auth.user.orgId,
             platform: input.platform,
             industry: detectedIndustry || undefined,
             limit: 15,
@@ -178,10 +221,17 @@ export async function POST(request: NextRequest) {
         const isJobMedley = input.platform === "jobmedley";
         const isHelloWork = input.platform === "hellowork";
         const hasMetrics = !isJobMedley && !isHelloWork && !!input.metrics;
+        // サムネイル再生成は任意(未指定は true = 従来挙動)
+        const generateThumbnails = input.generateThumbnails !== false;
 
         // 統合エージェント + デザイン + 予算を並列実行
         startAgent("tb-text-improvement", "参考原稿・メトリクス・現行原稿を統合分析し、リライト案を生成します");
-        startAgent("tb-design-improvement", "改善サムネイルの生成を開始します");
+        startAgent(
+          "tb-design-improvement",
+          generateThumbnails
+            ? "改善サムネイルの生成を開始します"
+            : "サムネイル再生成はオフのためスキップします"
+        );
         if (isIndeed && hasMetrics) {
           startAgent("tb-budget-optimization", "予算最適化の分析を開始します");
         }
@@ -200,14 +250,22 @@ export async function POST(request: NextRequest) {
             historyContext,
             crossJobMemory,
             sharedKnowledge: sharedKnowledgeText || undefined,
+            guideline: guidelines[input.platform],
           }),
-          runDesignImprovementAgent({
-            platform: input.platform,
-            existingPosting: input.existingPosting,
-            improvedPosting: input.existingPosting,
-            historyContext,
-            visualStyle,
-          }),
+          generateThumbnails
+            ? runDesignImprovementAgent({
+                platform: input.platform,
+                existingPosting: input.existingPosting,
+                improvedPosting: input.existingPosting,
+                historyContext,
+                visualStyle,
+              })
+            : Promise.resolve({
+                platformThumbnails: { indeed: [], airwork: [], jobmedley: [], hellowork: [] },
+                thumbnailUrls: [],
+                generationStatus: "success",
+                message: "サムネイル再生成はオフのためスキップしました",
+              } satisfies Awaited<ReturnType<typeof runDesignImprovementAgent>>),
           isIndeed && hasMetrics && input.metrics
             ? runBudgetOptimizationAgent({
                 metrics: input.metrics as IndeedMetrics,
@@ -222,6 +280,13 @@ export async function POST(request: NextRequest) {
           assessment: textResult.overallAssessment,
           metricsSummary: textResult.metricsSummary,
           issueCount: textResult.issues.length,
+          // ライブプレビュー用: 改善箇所の要約（先頭5件）
+          improvements: textResult.improvements.slice(0, 5).map((imp) => ({
+            fieldLabel: imp.fieldLabel,
+            before: imp.before,
+            after: imp.after,
+            reason: imp.reason,
+          })),
         });
 
         const platformThumbnails = designResult.platformThumbnails;
@@ -242,6 +307,7 @@ export async function POST(request: NextRequest) {
         // クロスジョブメモリに学習パターンを保存（非同期・エラー無視）
         try {
           await saveMemories({
+            orgId: auth.user.orgId,
             platform: input.platform,
             improvements: textResult.improvements,
             issues: textResult.issues,
@@ -257,7 +323,7 @@ export async function POST(request: NextRequest) {
             const improved = currCTR > prevCTR;
             const categories = textResult.issues.map((i) => i.category);
             if (categories.length > 0) {
-              await updateEffectiveness(input.platform, categories, improved);
+              await updateEffectiveness(auth.user.orgId, input.platform, categories, improved);
             }
           }
         } catch (e) {
@@ -275,8 +341,22 @@ export async function POST(request: NextRequest) {
           thumbnailUrls: designResult.thumbnailUrls,
           platformThumbnails,
           budgetRecommendation: budgetResult?.recommendation,
+          apiCostYen: getTrackedCostYen() ?? undefined,
           generatedAt: now(),
         };
+
+        // 実行成功時のみ課金記録(失敗しても改善処理は完了扱い)
+        try {
+          await recordUsage({
+            org,
+            userId: auth.user.id,
+            kind: "team_b",
+            jobId: input.jobId ?? null,
+          });
+          await settlePendingOverages(org);
+        } catch (e) {
+          console.error("[team-b] 課金記録に失敗:", e);
+        }
 
         sendEvent(controller, {
           type: "workflow_complete",

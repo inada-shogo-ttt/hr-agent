@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Trash2, Plus, ImageIcon } from "lucide-react";
 import { ThumbnailRegenerateDialog } from "./ThumbnailRegenerateDialog";
+import { ThumbnailSlotOption } from "@/lib/thumbnail-prompts";
 
 interface ThumbnailPreviewProps {
   urls: string[];
@@ -12,6 +13,8 @@ interface ThumbnailPreviewProps {
   jobId?: string;
   platform?: string;
   regeneratePrompt?: string;
+  // Indeed 用: スロット（1〜3枚目）別の再生成プロンプト
+  regenerateSlotOptions?: ThumbnailSlotOption[];
   onUrlsChange?: (urls: string[]) => void;
 }
 
@@ -31,6 +34,7 @@ export function ThumbnailPreview({
   jobId,
   platform,
   regeneratePrompt,
+  regenerateSlotOptions,
   onUrlsChange,
 }: ThumbnailPreviewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -135,6 +139,8 @@ export function ThumbnailPreview({
         platform={platform}
         currentUrls={urls}
         defaultPrompt={regeneratePrompt}
+        slotOptions={regenerateSlotOptions}
+        defaultSlotIndex={selectedIndex}
         onGenerated={(newUrls) => onUrlsChange?.([...urls, ...newUrls])}
       />
     ) : null;

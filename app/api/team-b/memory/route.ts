@@ -5,9 +5,13 @@ import {
   updateEffectiveness,
 } from "@/lib/agents/team-b/memory";
 import { Platform } from "@/types/platform";
+import { requireAuth } from "@/lib/auth-guard";
 
 // GET /api/team-b/memory — メモリパターン検索
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get("platform") as Platform;
   const categories = searchParams.get("categories")?.split(",") || undefined;
@@ -22,6 +26,7 @@ export async function GET(request: NextRequest) {
   }
 
   const memories = await searchMemories({
+    orgId: auth.user.orgId,
     platform,
     categories,
     industry,
@@ -33,6 +38,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/team-b/memory — メモリパターン保存 & 効果フィードバック
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   const body = await request.json();
   const { action } = body;
 
@@ -40,6 +48,7 @@ export async function POST(request: NextRequest) {
     const { platform, improvements, issues, sourceJobId, industry, jobType } =
       body;
     const savedCount = await saveMemories({
+      orgId: auth.user.orgId,
       platform,
       improvements: improvements || [],
       issues: issues || [],
@@ -52,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   if (action === "feedback") {
     const { platform, categories, improved } = body;
-    await updateEffectiveness(platform, categories, improved);
+    await updateEffectiveness(auth.user.orgId, platform, categories, improved);
     return NextResponse.json({ success: true });
   }
 

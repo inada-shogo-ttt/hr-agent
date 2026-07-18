@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Briefcase,
-  BookOpen,
   ChevronRight,
   LogOut,
   Settings,
@@ -27,21 +27,15 @@ interface Breadcrumb {
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
+  super_admin: "最高管理者",
   admin: "管理者",
-  editor: "作成者",
-  reviewer: "承認者",
-  publisher: "掲載担当",
+  member: "ユーザー",
 };
 
 function getBreadcrumbs(pathname: string): Breadcrumb[] {
   if (pathname === "/" || pathname === "") return [];
   if (pathname === "/jobs") return [];
-  if (pathname === "/references") return [];
   if (pathname.startsWith("/settings")) return [];
-
-  if (pathname === "/references/new") {
-    return [{ label: "参考原稿一覧", href: "/references" }];
-  }
 
   const officeDetailMatch = pathname.match(/^\/jobs\/offices\/([^/]+)$/);
   if (officeDetailMatch) {
@@ -104,21 +98,42 @@ function getBreadcrumbs(pathname: string): Breadcrumb[] {
   return [{ label: "戻る", href: "/" }];
 }
 
+interface CreditInfo {
+  billingExempt: boolean;
+  active: boolean;
+  remainingCreditYen: number;
+}
+
 export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, signOut } = useUser();
   const breadcrumbs = getBreadcrumbs(pathname);
+  const [credit, setCredit] = useState<CreditInfo | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/billing/summary")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setCredit({
+          billingExempt: data.org.billingExempt,
+          active: data.org.subscriptionStatus === "active",
+          remainingCreditYen: data.usage.remainingCreditYen,
+        });
+      })
+      .catch(() => {});
+  }, [user]);
 
   // ログインページではヘッダー非表示
   if (pathname === "/login") return null;
 
-  // ホームページでは未認証時ヘッダー非表示
+  // LPは専用ヘッダーを持つため、アプリ用ヘッダーは表示しない
   const isHome = pathname === "/";
-  if (isHome && !user) return null;
+  if (isHome) return null;
 
   const isJobsActive = pathname.startsWith("/jobs");
-  const isReferencesActive = pathname.startsWith("/references");
 
   async function handleSignOut() {
     await signOut();
@@ -127,14 +142,14 @@ export function AppHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200/60 bg-[#FAFAF8]/80 backdrop-blur-md">
-      <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+    <header className="sticky top-0 z-50 border-b border-gray-300 bg-white">
+      <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-gray-900 text-white text-xs font-bold tracking-tight">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary text-white text-[13px] font-bold tracking-tight">
               採
             </span>
-            <span className="text-[15px] font-semibold tracking-tight text-gray-900 hidden sm:inline">
+            <span className="text-[15px] font-bold tracking-tight text-primary hidden sm:inline">
               採用エージェント
             </span>
           </Link>
@@ -171,33 +186,29 @@ export function AppHeader() {
         </div>
 
         <nav className="flex items-center gap-2 shrink-0">
-          <Link href="/references">
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`text-[13px] h-8 px-3 ${
-                isReferencesActive
-                  ? "text-gray-900 font-semibold bg-gray-100"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5 mr-1.5" />
-              参考原稿
-            </Button>
-          </Link>
           <Link href="/jobs">
             <Button
               size="sm"
-              className={`text-[13px] h-8 px-4 rounded-lg ${
+              className={`text-[13px] h-9 px-5 rounded-full ${
                 isJobsActive
-                  ? "bg-gray-900 hover:bg-gray-800"
-                  : "bg-gray-700 hover:bg-gray-800"
+                  ? "bg-[#e00b41] hover:bg-[#e00b41]"
+                  : "bg-primary hover:bg-[#e00b41]"
               }`}
             >
               <Briefcase className="w-3.5 h-3.5 mr-1.5" />
               求人管理
             </Button>
           </Link>
+
+          {/* 残クレジット(課金免除組織には非表示) */}
+          {credit && !credit.billingExempt && credit.active && (
+            <Link
+              href="/settings/billing"
+              className="hidden sm:inline-flex items-center h-7 px-2.5 rounded-full bg-gray-50 border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-100"
+            >
+              残クレジット ¥{credit.remainingCreditYen.toLocaleString()}
+            </Link>
+          )}
 
           {/* ユーザーメニュー */}
           {user && (
@@ -206,9 +217,9 @@ export function AppHeader() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 gap-1.5"
+                  className="h-9 px-2 gap-1.5 rounded-full"
                 >
-                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[11px] font-medium text-gray-600">
+                  <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center text-[11px] font-medium text-gray-700">
                     {user.name.charAt(0)}
                   </div>
                   <span className="text-[13px] text-gray-700 hidden sm:inline">
@@ -228,7 +239,7 @@ export function AppHeader() {
                   </Badge>
                 </div>
                 <DropdownMenuSeparator />
-                {user.role === "admin" && (
+                {user.role !== "member" && (
                   <DropdownMenuItem onClick={() => router.push("/settings/offices")}>
                     <Settings className="w-4 h-4 mr-2" />
                     設定

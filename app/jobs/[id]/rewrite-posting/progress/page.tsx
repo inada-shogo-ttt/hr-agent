@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle, Circle, Clock, Loader2, XCircle } from "lucide-react";
-import { OfficeScene, OfficeAgent } from "@/app/components/workflow/OfficeScene";
+import { LiveWritingDesk, DeskStep, FeedItem } from "@/app/components/workflow/LiveWritingDesk";
 import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
 import { TeamBOutput } from "@/types/team-b";
 import { AgentStatus } from "@/lib/agents/types";
@@ -37,11 +37,63 @@ const AGENT_WEIGHTS: Record<TeamBAgentId, number> = {
   "tb-budget-optimization": 10,
 };
 
-const TEAM_B_AGENTS: OfficeAgent[] = [
-  { id: "tb-text-improvement", label: "原稿改善", color: "#6366F1" },
-  { id: "tb-design-improvement", label: "デザイン改善", color: "#EC4899" },
-  { id: "tb-budget-optimization", label: "予算最適化", color: "#F59E0B" },
+const TEAM_B_STEPS: DeskStep[] = [
+  { id: "tb-text-improvement", label: "原稿改善" },
+  { id: "tb-design-improvement", label: "デザイン改善" },
+  { id: "tb-budget-optimization", label: "予算最適化" },
 ];
+
+// SSEイベントからライブプレビューのフィードを組み立てる（すべて実データ）
+function buildTeamBFeed(events: TeamBSSEEvent[]): FeedItem[] {
+  const items: FeedItem[] = [];
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    const data = (event.data ?? {}) as Record<string, unknown>;
+    const id = `${event.agentId}-${event.type}-${i}`;
+
+    if (event.type === "agent_start" && event.agentId === "tb-text-improvement") {
+      items.push({ id, kind: "text", label: "分析開始", text: event.message });
+    }
+
+    if (event.type !== "agent_complete") continue;
+
+    switch (event.agentId) {
+      case "tb-text-improvement": {
+        if (typeof data.metricsSummary === "string" && data.metricsSummary) {
+          items.push({ id: `${id}-metrics`, kind: "text", label: "掲載数値の所見", text: data.metricsSummary });
+        }
+        if (typeof data.assessment === "string" && data.assessment) {
+          items.push({ id: `${id}-assessment`, kind: "text", label: "原稿の総合評価", text: data.assessment });
+        }
+        if (Array.isArray(data.improvements)) {
+          (data.improvements as Array<Record<string, string>>).forEach((imp, j) => {
+            items.push({
+              id: `${id}-imp-${j}`,
+              kind: "text",
+              label: `改善: ${imp.fieldLabel || ""}`,
+              text: `${imp.before || ""} → ${imp.after || ""}${imp.reason ? `（${imp.reason}）` : ""}`,
+            });
+          });
+        }
+        break;
+      }
+      case "tb-design-improvement":
+        items.push({ id, kind: "text", label: "サムネイル", text: event.message });
+        break;
+      case "tb-budget-optimization":
+        items.push({
+          id,
+          kind: "text",
+          label: "予算最適化",
+          text: typeof data.recommendedRange === "string" && data.recommendedRange
+            ? `推奨日額予算: ${data.recommendedRange}`
+            : event.message,
+        });
+        break;
+    }
+  }
+  return items;
+}
 
 function StatusIcon({ status }: { status: AgentStatus | undefined }) {
   switch (status) {
@@ -66,6 +118,7 @@ export default function JobTeamBProgressPage() {
   const params = useParams();
   const jobId = params.id as string;
   const [agentStatuses, setAgentStatuses] = useState<Record<string, { status: AgentStatus; message?: string }>>({});
+  const [events, setEvents] = useState<TeamBSSEEvent[]>([]);
   const [progress, setProgress] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +186,12 @@ export default function JobTeamBProgressPage() {
     };
   };
 
+  // ライブプレビュー用フィード（SSEイベントの実データから導出）
+  const feed = useMemo(() => buildTeamBFeed(events), [events]);
+
   const handleEvent = async (event: TeamBSSEEvent) => {
+    setEvents((prev) => [...prev, event]);
+
     if (event.type === "agent_start") {
       setAgentStatuses((prev) => ({
         ...prev,
@@ -253,7 +311,7 @@ export default function JobTeamBProgressPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-2">AIエージェント実行中（原稿改善）</h1>
         <p className="text-muted-foreground mb-4">
@@ -272,9 +330,14 @@ export default function JobTeamBProgressPage() {
           </div>
         )}
 
-        {/* オフィスシーン */}
+        {/* 原稿ライブプレビュー */}
         <div className="mb-6">
-          <OfficeScene agents={TEAM_B_AGENTS} statuses={agentStatuses} progress={progress} />
+          <LiveWritingDesk
+            steps={TEAM_B_STEPS}
+            statuses={agentStatuses}
+            feed={feed}
+            isComplete={isComplete}
+          />
         </div>
 
         <Card className="mb-6">

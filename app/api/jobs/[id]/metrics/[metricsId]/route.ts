@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth-guard";
+import { getOwnedJob } from "@/lib/org-scope";
 
 export const runtime = "nodejs";
 
@@ -11,7 +12,11 @@ export async function PATCH(
   const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
-  const { metricsId } = await params;
+  const { id, metricsId } = await params;
+
+  const owned = await getOwnedJob(id, auth.user, "write");
+  if ("error" in owned) return owned.error;
+
   const body = await request.json();
 
   const { data, error } = await supabaseAdmin
@@ -38,7 +43,10 @@ export async function DELETE(
   const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
-  const { metricsId } = await params;
+  const { id, metricsId } = await params;
+
+  const owned = await getOwnedJob(id, auth.user, "write");
+  if ("error" in owned) return owned.error;
 
   const { error } = await supabaseAdmin
     .from("PublishMetrics")

@@ -1,14 +1,29 @@
 import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
 import { ManuscriptWritingInput, ManuscriptWritingOutput } from "./types";
 import { extractJSON } from "./utils";
+import { PLATFORM_GUIDELINE_DEFAULTS } from "@/lib/platform-guidelines/defaults";
+
+export type ManuscriptPlatform = "indeed" | "airwork" | "jobmedley" | "hellowork";
+
+// 待機画面のライブプレビュー用: 媒体別の原稿が書き上がった時点の抜粋
+export interface ManuscriptPreview {
+  title: string;
+  catchphrase?: string;
+  excerpt: string;
+}
 
 export async function runManuscriptWritingAgent(
-  input: ManuscriptWritingInput
+  input: ManuscriptWritingInput,
+  onPlatformComplete?: (platform: ManuscriptPlatform, preview: ManuscriptPreview) => void
 ): Promise<ManuscriptWritingOutput> {
-  const { jobPostingInput, managerOutput, trendAnalysis, referenceSelection, userReferences, sharedKnowledge } = input;
+  const { jobPostingInput, managerOutput, trendAnalysis, userReferences, sharedKnowledge, guidelines } = input;
   const { common, indeed, airwork, jobmedley, hellowork } = jobPostingInput;
 
-  // ユーザー登録の成功原稿セクションを構築
+  // 媒体別ガイドライン（システム設定）。未ロード時はコード内デフォルトで動く
+  const guideline = (p: ManuscriptPlatform) =>
+    guidelines?.[p] ?? PLATFORM_GUIDELINE_DEFAULTS[p];
+
+  // システム参考原稿セクションを構築
   let userReferencesSection = "";
   if (userReferences && userReferences.length > 0) {
     const refsText = userReferences.map((ref) => {
@@ -20,9 +35,10 @@ export async function runManuscriptWritingAgent(
 
     userReferencesSection = `
 ## 参考にすべき成功原稿
-以下はユーザーが登録した応募実績のある求人原稿です。
+以下はシステムに登録された応募実績のある求人原稿です。
 文体、構成、訴求ポイントの出し方を参考にしてください。
 ただし、内容をコピーせず、今回の求人情報に合わせた独自の原稿を作成してください。
+参考求人の給与条件・雇用条件・福利厚生などの条件情報の流用は禁止です。条件は必ず今回の入力情報のみを使用してください。
 
 ${refsText}
 `;
@@ -74,9 +90,6 @@ ${common.competitiveAdvantage ? `競合優位性: ${common.competitiveAdvantage}
 推奨キーワード: ${trendAnalysis.recommendedKeywords.join(", ")}
 差別化ポイント: ${trendAnalysis.differentiationPoints.join(", ")}
 
-## ライティングガイドライン
-${referenceSelection.writingGuidelines}
-文体・トーン: ${referenceSelection.toneAndStyle}
 ${userReferencesSection}${sharedKnowledge ? `
 ## 過去の成功パターン（実績ベース・必ず反映すること）
 以下は過去の掲載実績から抽出された効果的なパターンです。
@@ -100,23 +113,31 @@ ${sharedKnowledge}
 ---`;
 
   // Indeed原稿
+  const indeedGuide = guideline("indeed");
   const indeedPrompt = `${basePrompt}
 
 ## Indeed原稿作成
-以下のJSON形式でIndeed用の求人原稿を作成してください。
+あなたはIndeedおよびIndeed PLUS連携媒体（タウンワーク、リクナビNEXT等）に精通した採用コピーライターとして、以下のJSON形式でIndeed用の求人原稿を作成してください。
+Indeedのアルゴリズム特性を踏まえ、「検索でヒットし（表示）、クリックされ（CTR）、応募される（CVR）」原稿にすること。
 
-**jobTitle / catchphrase / jobDescription の3つは、後述の「Indeed求人フォーマット」に厳密に従って出力してください。**
-フォーマット内の { } は今回の求人内容で埋め、見出し・記号（⭕ ✅ ✨ ⇩ ↓ ＼／）・区切り線・改行構成はテンプレートのまま維持すること。
-このフォーマットは前述の装飾ルール（絵文字の個数目安）より優先する。テンプレートが要求する数の ⭕ ✅ ✨ はそのまま使用してよい。
+${indeedGuide.algorithm}
 
-**Indeed必須要件（厚労省ガイドライン準拠）**:
-- 「受動喫煙防止措置」と「転勤の可能性」（該当なければ「転勤なし」と明記）は jobDescription 末尾の【会社概要】内に必ず記載する
-- 固定残業代がある場合は「金額・みなし時間・超過分の扱い」を benefits に明示する
+## 執筆手順（内部で必ずこの順に実行する）
+- Step1 キーワード設計: ターゲットがIndeedの検索窓に入力しそうなキーワードを設計する。①職種キーワード（正式名称・一般的な言い換え）2〜4個、②こだわりキーワード（未経験、日勤のみ、土日休み、駅チカ など）3〜6個
+- Step2 設計したキーワードを、後述フォーマットの本文の中に自然な文章として織り込みながら執筆する（タグ的な羅列は5個程度まで）
+- Step3 出力前に後述の制約条件で検証し、不合格箇所を修正してからJSONを出力する
+
+## 制約条件（厳守）
+${indeedGuide.constraints}
+
+**jobTitle / catchphrase / jobDescription の3つは、後述の「求人フォーマット」に厳密に従って出力してください。**
+フォーマット内の { } は今回の求人内容で埋め、見出し・記号・区切り線・改行構成はテンプレートのまま維持すること。
+このフォーマットは前述の装飾ルール（絵文字の個数目安）より優先する。テンプレートが要求する数の記号・絵文字はそのまま使用してよい。
 
 {
   "jobTitle": "後述フォーマットの「タイトル」に従う",
-  "catchphrase": "後述フォーマットの「キャッチコピー」に従う（15〜20文字程度＋✨）",
-  "jobDescription": "後述フォーマットの「原稿」テンプレート全体を埋めたもの（改行込み、1000〜1500字程度）",
+  "catchphrase": "後述フォーマットの「キャッチコピー」に従う（15〜20文字程度＋✨、可能なら入力情報の数字・事実で裏付ける）",
+  "jobDescription": "後述フォーマットの「原稿」テンプレート全体を埋めたもの（改行込み。仕事内容＋一日の流れ・カジュアル面談・勤務条件ブロック・会社概要まで全セクションを過不足なく埋める）",
   "appealPoints": "アピールポイント（300字以内、改行込み）",
   "requirements": "求める人材（200字以内）",
   "holidays": "休暇休日（100字以内）",
@@ -126,82 +147,9 @@ ${sharedKnowledge}
   "probationPeriod": "試用期間（なければ空文字）"
 }
 
-## Indeed求人フォーマット（厳守）
+## 求人フォーマット（厳守）
 
-### タイトル（jobTitle）
-⭕{募集職種を一言でキャッチーに記載}⭕【{職種}・{雇用形態}】{勤務地}
-※{勤務地}は市区町村レベルで簡潔に記載
-
-### キャッチコピー（catchphrase）
-{求人をクリックして原稿を読みたくなるようなキャッチコピーを15〜20文字程度で記載}✨
-
-### 原稿（jobDescription）
-【あなたはいくつ当てはまりますか？】
-✅ { 潜在意識に訴求する一言① }
-✅ { 潜在意識に訴求する一言② }
-✅ { 潜在意識に訴求する一言③ }
-✅ { 潜在意識に訴求する一言④ }
-
-「一つでも当てはまる…！」と感じたら、
-もう読み進めずに応募ボタンを押してもOK。
-
-⇩詳しい内容が知りたい方は続きをチェック⇩
-
-✨{会社名}の{職種名}が"選ばれるワケ"✨
-
-⭕{アピールポイントタイトル①}⭕
-{3〜4行程度のアピールポイント訴求文}
-
-⭕{アピールポイントタイトル②}⭕
-{3〜4行程度のアピールポイント訴求文}
-
-⭕{アピールポイントタイトル③}⭕
-{3〜4行程度のアピールポイント訴求文}
-
-⭕{新人へのフォロー体制を一言で記載}⭕
-{フォローアップ訴求文を4行程度で記載}
-
-【求める人材】
-✅ { 求める人材一言① }
-✅ { 求める人材一言② }
-✅ { 求める人材一言③ }
-
-＜必須条件＞
-{箇条書きで必須条件を記載}
-
-＼あると嬉しい！／
-{箇条書きであると嬉しい条件を記載}
-
-＜大切にしている人物像＞
-{箇条書きで大切にしている人物像を記載}
-
-ーーーーーーーーーーーーーーーーーーーーーーー
-
-【選考フロー】
-{選考フローを✅を活用しながら記載
-例）
-✅「応募画面へ進む」よりご応募ください
-↓
-✅一次面談（採用担当）
-↓
-✅最終面接（各部門長）
-↓
-✅内定
-
-《お問い合わせ先》
-TEL：xxx-xxx-xxxx
-「求人を見た」とお問い合わせください。
-※電話番号は採用担当者の電話番号が入力されている場合のみ記載}
-
-ーーーーーーーーーーーーーーーーーーーーーーー
-
-【会社概要】
-・企業名：{会社名}
-・所在地：{勤務地住所}
-・アクセス：{最寄り駅・アクセス}
-・事業内容：{業種・事業内容}
-・受動喫煙対策：{受動喫煙防止措置}
-・転勤：{転勤の可能性（なければ「なし」）}
+${indeedGuide.format}
 
 ${indeed?.catchphrase ? `参考キャッチコピー（ユーザー指定）: ${indeed.catchphrase}` : ""}
 ${indeed?.featureTags?.length ? `特長タグ（Indeedの「特長」に表示）: ${indeed.featureTags.join(" / ")}` : ""}`;
@@ -213,15 +161,17 @@ ${indeed?.featureTags?.length ? `特長タグ（Indeedの「特長」に表示�
     ? "試用期間: なし"
     : "";
 
+  const airworkGuide = guideline("airwork");
   const airworkPrompt = `${basePrompt}
 
 ## AirWork原稿作成
 以下のJSON形式でAirWork用の求人原稿を作成してください。
-AirWorkは求職者が仕事内容を重視するため、具体的な業務内容を詳しく書いてください。
 
-**AirWork必須要件**:
-- 試用・研修の有無は仕事内容末尾に明記する（AirWorkの必須項目）
+${airworkGuide.algorithm}
 
+## 制約条件（厳守）
+${airworkGuide.constraints}
+${airworkGuide.format ? `\n## 求人フォーマット（厳守）\n\n${airworkGuide.format}\n` : ""}
 ${airwork?.shiftIncomeExample ? `シフト・収入例: ${airwork.shiftIncomeExample}` : ""}
 ${airwork?.seniorStaffMessage ? `先輩スタッフからの一言: ${airwork.seniorStaffMessage}` : ""}
 ${airwork?.workplaceAtmosphere ? `職場の環境・雰囲気: ${airwork.workplaceAtmosphere}` : ""}
@@ -240,12 +190,17 @@ ${trialPeriodStr}
 ${airwork?.catchphrase ? `参考キャッチコピー（ユーザー指定）: ${airwork.catchphrase}` : ""}`;
 
   // JobMedley原稿
+  const jobmedleyGuide = guideline("jobmedley");
   const jobmedleyPrompt = `${basePrompt}
 
 ## JobMedley原稿作成
 以下のJSON形式でJobMedley用の求人原稿を作成してください。
-JobMedleyは医療・介護・福祉系の求職者が多いため、教育体制・職場環境を重視して書いてください。
 
+${jobmedleyGuide.algorithm}
+
+## 制約条件（厳守）
+${jobmedleyGuide.constraints}
+${jobmedleyGuide.format ? `\n## 求人フォーマット（厳守）\n\n${jobmedleyGuide.format}\n` : ""}
 ${jobmedley?.staffVoice ? `職員の声: ${jobmedley.staffVoice}` : ""}
 ${jobmedley?.workplaceAtmosphere ? `職場の環境: ${jobmedley.workplaceAtmosphere}` : ""}
 
@@ -266,6 +221,7 @@ ${jobmedley?.appealTitle ? `参考訴求文タイトル（ユーザー指定）:
 ${jobmedley?.trainingSystem ? `教育体制補足: ${jobmedley.trainingSystem}` : ""}`;
 
   // ハローワーク原稿
+  const helloworkGuide = guideline("hellowork");
   const helloworkPrompt = `あなたは求人広告の一流コピーライターです。
 以下の情報をもとに、ハローワーク（公共職業安定所）に掲載する求人票の原稿を作成してください。
 
@@ -293,13 +249,11 @@ ${common.selectionProcess ? `選考の流れ: ${common.selectionProcess}` : ""}
 ## 分析結果
 要件サマリー: ${managerOutput.summary}
 
-## ハローワーク求人票の作成ルール（厳守）
-1. **全角文字のみ使用**してください。数字・英字・記号も全て全角（例：１２３、ＡＢＣ、〜、（）、：）
-2. **絵文字は一切使用禁止**です
-3. 簡潔で事実に基づいた記載にしてください（誇大表現禁止）
-4. 厚生労働省の求人票記載ガイドラインに準拠してください
-5. 箇条書きは「・」（全角中点）を使用してください
+${helloworkGuide.algorithm}
 
+## 制約条件（厳守）
+${helloworkGuide.constraints}
+${helloworkGuide.format ? `\n## 求人フォーマット（厳守）\n\n${helloworkGuide.format}\n` : ""}
 ${hellowork?.representativeName ? `代表者名: ${hellowork.representativeName}` : ""}
 ${hellowork?.establishmentYear ? `設立年: ${hellowork.establishmentYear}` : ""}
 ${hellowork?.capital ? `資本金: ${hellowork.capital}` : ""}
@@ -319,12 +273,7 @@ ${common.smokingPolicy ? `受動喫煙対策: ${common.smokingPolicy}` : ""}
 ${fixedOvertimeStr}
 
 以下のJSON形式でハローワーク用の求人票原稿を作成してください。
-全ての値は全角文字で記載し、絵文字は使用しないこと。
-
-**【重要】ハローワーク公式制限:**
-- 職種名: 全角28字以内（1求人1職種）
-- 仕事の内容: 全角360字以内（30字×12行、冒頭90字が概要表示）
-- 2024年法改正により「就業場所の変更の可能性」「業務内容の変更の可能性」「転勤の可能性」は必須項目
+全ての値は全角文字で記載し、絵文字は使用しないこと。前述の制約条件（文字数制限・必須項目）を厳守すること。
 
 {
   "jobTitle": "職種名（全角、２８字以内、１求人１職種）",
@@ -407,12 +356,59 @@ ${fixedOvertimeStr}
 
   const helloworkSystem = "あなたはJSON生成専門のアシスタントです。ユーザーの指示に従い、指定されたJSON形式のみを出力してください。JSONの前後に説明文やマークダウンを付けないでください。純粋なJSONオブジェクトのみを返してください。全ての値は全角文字で記載し、絵文字は一切使用しないでください。";
 
-  // 4媒体を並列で生成（各媒体にリトライあり）
+  // 媒体別の完成をライブプレビューとして通知（失敗しても本体処理には影響させない）
+  const withPreview = (
+    promise: Promise<unknown>,
+    platform: ManuscriptPlatform,
+    toPreview: (result: Record<string, unknown>) => ManuscriptPreview,
+  ) =>
+    promise.then((result) => {
+      try {
+        onPlatformComplete?.(platform, toPreview(result as Record<string, unknown>));
+      } catch (e) {
+        console.warn(`[manuscript-writing] ${platform} プレビュー通知に失敗:`, e);
+      }
+      return result;
+    });
+
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+  // 選択された媒体のみ並列で生成（各媒体にリトライあり）。未指定は全媒体
+  const selectedPlatforms: ManuscriptPlatform[] =
+    jobPostingInput.selectedPlatforms && jobPostingInput.selectedPlatforms.length > 0
+      ? jobPostingInput.selectedPlatforms
+      : ["indeed", "airwork", "jobmedley", "hellowork"];
+  const isSelected = (p: ManuscriptPlatform) => selectedPlatforms.includes(p);
+
   const [indeedResult, airworkResult, jobmedleyResult, helloworkResult] = await Promise.allSettled([
-    callWithRetry(indeedPrompt, systemMessage, 8192, "manuscript-writing/indeed"),
-    callWithRetry(airworkPrompt, systemMessage, 8192, "manuscript-writing/airwork"),
-    callWithRetry(jobmedleyPrompt, systemMessage, 8192, "manuscript-writing/jobmedley"),
-    callWithRetry(helloworkPrompt, helloworkSystem, 8192, "manuscript-writing/hellowork"),
+    isSelected("indeed")
+      ? withPreview(
+          callWithRetry(indeedPrompt, systemMessage, 8192, "manuscript-writing/indeed"),
+          "indeed",
+          (r) => ({ title: str(r.jobTitle), catchphrase: str(r.catchphrase) || undefined, excerpt: str(r.jobDescription).slice(0, 200) }),
+        )
+      : Promise.resolve(undefined),
+    isSelected("airwork")
+      ? withPreview(
+          callWithRetry(airworkPrompt, systemMessage, 8192, "manuscript-writing/airwork"),
+          "airwork",
+          (r) => ({ title: str(r.jobTitle), catchphrase: str(r.catchphrase) || undefined, excerpt: str(r.jobDescription).slice(0, 200) }),
+        )
+      : Promise.resolve(undefined),
+    isSelected("jobmedley")
+      ? withPreview(
+          callWithRetry(jobmedleyPrompt, systemMessage, 8192, "manuscript-writing/jobmedley"),
+          "jobmedley",
+          (r) => ({ title: str(r.appealTitle), excerpt: str(r.appealText).slice(0, 200) }),
+        )
+      : Promise.resolve(undefined),
+    isSelected("hellowork")
+      ? withPreview(
+          callWithRetry(helloworkPrompt, helloworkSystem, 8192, "manuscript-writing/hellowork"),
+          "hellowork",
+          (r) => ({ title: str(r.jobTitle), excerpt: str(r.jobDescription).slice(0, 200) }),
+        )
+      : Promise.resolve(undefined),
   ]);
 
   // 結果を収集（失敗した媒体はエラーを報告）
@@ -423,9 +419,9 @@ ${fixedOvertimeStr}
   };
 
   return {
-    indeed: getResult(indeedResult, "Indeed"),
-    airwork: getResult(airworkResult, "AirWork"),
-    jobmedley: getResult(jobmedleyResult, "JobMedley"),
-    hellowork: getResult(helloworkResult, "ハローワーク"),
+    ...(isSelected("indeed") ? { indeed: getResult(indeedResult, "Indeed") } : {}),
+    ...(isSelected("airwork") ? { airwork: getResult(airworkResult, "AirWork") } : {}),
+    ...(isSelected("jobmedley") ? { jobmedley: getResult(jobmedleyResult, "JobMedley") } : {}),
+    ...(isSelected("hellowork") ? { hellowork: getResult(helloworkResult, "ハローワーク") } : {}),
   } as ManuscriptWritingOutput;
 }

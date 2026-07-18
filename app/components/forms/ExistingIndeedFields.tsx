@@ -12,6 +12,7 @@ import {
   Eye,
   PlayCircle,
   Wallet,
+  CalendarRange,
   ChevronDown,
   ChevronUp,
   Calculator,
@@ -36,7 +37,6 @@ function getApplicationEmoji(count: number | undefined) {
 }
 
 export function ExistingIndeedFields({ data, metrics, onChange, onMetricsChange }: ExistingIndeedFieldsProps) {
-  const [showDetailedMetrics, setShowDetailedMetrics] = useState(false);
   const [showCalculated, setShowCalculated] = useState(false);
   const [manualOverrides, setManualOverrides] = useState<Record<string, boolean>>({});
 
@@ -54,6 +54,30 @@ export function ExistingIndeedFields({ data, metrics, onChange, onMetricsChange 
     ? Math.round(metrics.totalBudgetUsed / metrics.clicks)
     : undefined;
 
+  // 掲載期間から日数・日額費用・応募単価を自動算出
+  const dateRangeInvalid = (() => {
+    if (!metrics.postingStartDate || !metrics.postingEndDate) return false;
+    const start = new Date(metrics.postingStartDate);
+    const end = new Date(metrics.postingEndDate);
+    return !isNaN(start.getTime()) && !isNaN(end.getTime()) && end < start;
+  })();
+  const calcDays = (() => {
+    if (!metrics.postingStartDate || !metrics.postingEndDate || dateRangeInvalid) return undefined;
+    const start = new Date(metrics.postingStartDate);
+    const end = new Date(metrics.postingEndDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return undefined;
+    return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+  })();
+  const calcDailyCost = metrics.totalBudgetUsed && calcDays
+    ? Math.round(metrics.totalBudgetUsed / calcDays)
+    : undefined;
+  const calcCpa = metrics.totalBudgetUsed && metrics.applications
+    ? Math.round(metrics.totalBudgetUsed / metrics.applications)
+    : undefined;
+  const budgetUtilization = metrics.totalBudgetUsed && metrics.dailyBudget && calcDays
+    ? Math.round((metrics.totalBudgetUsed / (metrics.dailyBudget * calcDays)) * 100)
+    : undefined;
+
   // 自動計算値を反映（手動上書きされていない場合のみ）
   // onMetricsChangeはdependencyから外し、refで最新を参照する
   const onMetricsChangeRef = useRef(onMetricsChange);
@@ -65,12 +89,25 @@ export function ExistingIndeedFields({ data, metrics, onChange, onMetricsChange 
     if (!manualOverrides.applicationStartRate && calcAppStartRate !== undefined) updates.applicationStartRate = calcAppStartRate;
     if (!manualOverrides.applicationCompleteRate && calcAppCompleteRate !== undefined) updates.applicationCompleteRate = calcAppCompleteRate;
     if (!manualOverrides.cpc && calcCpc !== undefined) updates.cpc = calcCpc;
+    if (calcDays !== undefined) updates.postingDays = calcDays;
+    if (calcDailyCost !== undefined) updates.dailyCost = calcDailyCost;
+    if (calcCpa !== undefined) updates.cpa = calcCpa;
     if (Object.keys(updates).length > 0) onMetricsChangeRef.current(updates);
-  }, [calcCtr, calcAppStartRate, calcAppCompleteRate, calcCpc, manualOverrides]);
+  }, [calcCtr, calcAppStartRate, calcAppCompleteRate, calcCpc, calcDays, calcDailyCost, calcCpa, manualOverrides]);
 
   const handleManualOverride = (field: string, value: string) => {
     setManualOverrides((prev) => ({ ...prev, [field]: value !== "" }));
     onMetricsChange({ [field]: value === "" ? undefined : parseFloat(value) });
+  };
+
+  const handleDateChange = (field: "postingStartDate" | "postingEndDate", value: string) => {
+    const updates: Partial<IndeedMetrics> = { [field]: value || undefined };
+    // 期間が不成立になったら派生値も消す
+    if (!value) {
+      updates.postingDays = undefined;
+      updates.dailyCost = undefined;
+    }
+    onMetricsChange(updates);
   };
 
   const displayCtr = manualOverrides.ctr ? metrics.ctr : (calcCtr ?? metrics.ctr);
@@ -182,46 +219,86 @@ export function ExistingIndeedFields({ data, metrics, onChange, onMetricsChange 
           </Card>
         </div>
 
-        {/* ===== 下段: 予算系（小さめ） ===== */}
-        <button
-          type="button"
-          onClick={() => setShowDetailedMetrics(!showDetailedMetrics)}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors text-sm text-gray-600"
-        >
-          <div className="flex items-center gap-2">
-            <Wallet className="w-3.5 h-3.5" />
-            <span>予算情報</span>
-            {(metrics.dailyBudget || metrics.totalBudgetUsed) && (
-              <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded">入力済</span>
+        {/* ===== 掲載期間・費用 ===== */}
+        <Card className="border-gray-200">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet className="w-4 h-4 text-amber-500" />
+              <Label className="text-sm font-semibold text-gray-700">掲載期間・費用</Label>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              掲載期間と費用を入力すると、日額費用・応募単価を自動算出して AI の分析に使います
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">掲載開始日</Label>
+                <Input
+                  type="date"
+                  value={metrics.postingStartDate ?? ""}
+                  onChange={(e) => handleDateChange("postingStartDate", e.target.value)}
+                  className="text-sm h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">掲載終了日</Label>
+                <Input
+                  type="date"
+                  value={metrics.postingEndDate ?? ""}
+                  onChange={(e) => handleDateChange("postingEndDate", e.target.value)}
+                  className="text-sm h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">日額予算（円）</Label>
+                <Input
+                  type="number"
+                  value={metrics.dailyBudget ?? ""}
+                  onChange={(e) => onMetricsChange({ dailyBudget: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                  placeholder="例: 1000"
+                  className="text-sm h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">合計費用・利用済（円）</Label>
+                <Input
+                  type="number"
+                  value={metrics.totalBudgetUsed ?? ""}
+                  onChange={(e) => onMetricsChange({ totalBudgetUsed: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                  placeholder="例: 30000"
+                  className="text-sm h-9"
+                />
+              </div>
+            </div>
+            {dateRangeInvalid && (
+              <p className="text-xs text-red-500 mt-2">掲載終了日は開始日以降の日付にしてください</p>
             )}
-          </div>
-          {showDetailedMetrics ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-
-        {showDetailedMetrics && (
-          <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-gray-500">日額予算（円）</Label>
-              <Input
-                type="number"
-                value={metrics.dailyBudget ?? ""}
-                onChange={(e) => onMetricsChange({ dailyBudget: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
-                placeholder="例: 1000"
-                className="text-sm h-9"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-gray-500">合計予算・利用済（円）</Label>
-              <Input
-                type="number"
-                value={metrics.totalBudgetUsed ?? ""}
-                onChange={(e) => onMetricsChange({ totalBudgetUsed: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
-                placeholder="例: 30000"
-                className="text-sm h-9"
-              />
-            </div>
-          </div>
-        )}
+            {(calcDays !== undefined || calcDailyCost !== undefined || calcCpa !== undefined) && (
+              <div className="flex flex-wrap gap-2 mt-3 animate-in fade-in duration-200">
+                {calcDays !== undefined && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
+                    <CalendarRange className="w-3 h-3" />
+                    掲載日数 {calcDays}日
+                  </span>
+                )}
+                {calcDailyCost !== undefined && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
+                    日額費用 {calcDailyCost.toLocaleString()}円/日
+                  </span>
+                )}
+                {calcCpa !== undefined && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
+                    応募単価 {calcCpa.toLocaleString()}円
+                  </span>
+                )}
+                {budgetUtilization !== undefined && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
+                    予算消化率 {budgetUtilization}%
+                  </span>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ===== 自動算出エリア ===== */}
         <button
@@ -340,27 +417,16 @@ export function ExistingIndeedFields({ data, metrics, onChange, onMetricsChange 
           </div>
           <div className="space-y-2">
             <Label>勤務時間</Label>
-            <Input value={data.workingHours || ""} onChange={(e) => onChange({ workingHours: e.target.value })} placeholder="9:00〜18:00" />
+            <Textarea value={data.workingHours || ""} onChange={(e) => onChange({ workingHours: e.target.value })} rows={2} placeholder="9:00〜18:00" />
           </div>
           <div className="space-y-2">
-            <Label>仕事内容</Label>
-            <Textarea value={data.jobDescription || ""} onChange={(e) => onChange({ jobDescription: e.target.value })} rows={5} placeholder="具体的な仕事内容を記載" />
-          </div>
-          <div className="space-y-2">
-            <Label>アピールポイント</Label>
-            <Textarea value={data.appealPoints || ""} onChange={(e) => onChange({ appealPoints: e.target.value })} rows={3} placeholder="この求人の魅力" />
-          </div>
-          <div className="space-y-2">
-            <Label>求める人材</Label>
-            <Textarea value={data.requirements || ""} onChange={(e) => onChange({ requirements: e.target.value })} rows={3} placeholder="応募条件・求めるスキル" />
-          </div>
-          <div className="space-y-2">
-            <Label>休暇休日</Label>
-            <Input value={data.holidays || ""} onChange={(e) => onChange({ holidays: e.target.value })} placeholder="土日祝休み、年間休日120日" />
-          </div>
-          <div className="space-y-2">
-            <Label>アクセス</Label>
-            <Input value={data.access || ""} onChange={(e) => onChange({ access: e.target.value })} placeholder="渋谷駅 徒歩5分" />
+            <Label>原稿</Label>
+            <Textarea
+              value={data.jobDescription || ""}
+              onChange={(e) => onChange({ jobDescription: e.target.value })}
+              rows={18}
+              placeholder="Indeedに掲載中の原稿全文をそのまま貼り付けてください（仕事内容・アピールポイント・求める人材・休暇・休日・アクセス・待遇・福利厚生を含む）"
+            />
           </div>
           <div className="space-y-2">
             <Label>社会保険</Label>
@@ -369,10 +435,6 @@ export function ExistingIndeedFields({ data, metrics, onChange, onMetricsChange 
           <div className="space-y-2">
             <Label>試用期間</Label>
             <Input value={data.probationPeriod || ""} onChange={(e) => onChange({ probationPeriod: e.target.value })} placeholder="3ヶ月（条件変更なし）" />
-          </div>
-          <div className="space-y-2">
-            <Label>待遇・福利厚生</Label>
-            <Textarea value={data.benefits || ""} onChange={(e) => onChange({ benefits: e.target.value })} rows={3} placeholder="交通費支給、各種手当など" />
           </div>
           <div className="space-y-2">
             <Label>給与の補足</Label>

@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth-guard";
 
 // GET /api/jobs — 求人一覧（Office/JobType/EmploymentType JOIN済み）
 export async function GET() {
-  const { data: jobs, error } = await supabase
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
+  let query = supabase
     .from("Job")
     .select(`
       *,
@@ -12,6 +16,10 @@ export async function GET() {
       EmploymentType(id, name)
     `)
     .order("updatedAt", { ascending: false });
+
+  if (auth.user.role !== "super_admin") query = query.eq("orgId", auth.user.orgId);
+
+  const { data: jobs, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

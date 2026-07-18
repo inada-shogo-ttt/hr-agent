@@ -42,7 +42,7 @@ export default function JobNewPostingPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+      <main className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin" />
           流用元の求人データを読み込み中...
@@ -54,7 +54,7 @@ export default function JobNewPostingPage() {
   const isReuse = !!sourceJobId && !!sourceInput;
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-2">
           {isReuse ? "既存求人を流用して原稿を作成" : "新規求人原稿を作成"}
@@ -62,7 +62,7 @@ export default function JobNewPostingPage() {
         <p className="text-muted-foreground mb-8">
           {isReuse
             ? "流用元の内容をフォームに反映済みです。必要な箇所を修正して原稿を生成してください。"
-            : "求人情報を入力してください。AIエージェントが自動で4媒体分の原稿を生成します。"}
+            : "求人情報を入力してください。AIエージェントが選択した媒体分の原稿を自動生成します。"}
         </p>
 
         {isReuse && (
@@ -97,6 +97,7 @@ export default function JobNewPostingPage() {
         <JobInputForm
           jobId={jobId}
           initialData={sourceInput || undefined}
+          reuseSourceJobId={isReuse ? sourceJobId! : undefined}
         />
       </div>
     </main>

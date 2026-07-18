@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
+import { requireAuth } from "@/lib/auth-guard";
 
 const SYSTEM_PROMPT = `あなたは求人情報の構造化解析エキスパートです。
 ユーザーから提供されたテキスト、ファイル、またはWebページの内容から、求人に関する情報をできる限り多く・正確に抽出し、以下のJSON形式に変換してください。
@@ -216,6 +217,9 @@ async function fetchUrlContent(url: string): Promise<{ content: string; method: 
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   try {
     const body = await req.json();
     const { text, fileContents, urls } = body as {

@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-jakarta), var(--font-zen-kaku), "Hiragino Sans", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -47,73 +47,223 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
+/*
+ * Airbnb design tokens (DESIGN-airbnb.md)
+ * - Canvas #ffffff / Ink #222222 / single accent Rausch #ff385c
+ * - Hairline borders (#dddddd / #ebebeb), soft radii, one shadow tier
+ */
+@theme {
+  /* Neutral ramp → Airbnb ink/muted/hairline scale (gray = 事実上の標準中立色) */
+  --color-gray-50: #f7f7f7;   /* surface-soft */
+  --color-gray-100: #f2f2f2;  /* surface-strong */
+  --color-gray-200: #ebebeb;  /* hairline-soft */
+  --color-gray-300: #dddddd;  /* hairline */
+  --color-gray-400: #929292;  /* muted-soft */
+  --color-gray-500: #6a6a6a;  /* muted */
+  --color-gray-600: #565656;
+  --color-gray-700: #3f3f3f;  /* body */
+  --color-gray-800: #2f2f2f;
+  --color-gray-900: #222222;  /* ink */
+  --color-gray-950: #1a1a1a;
+
+  /* Blue系 → Rausch ramp（本システムの主アクセントは常に Rausch） */
+  --color-blue-50: #fff0f3;
+  --color-blue-100: #ffe1e8;
+  --color-blue-200: #ffd1da;  /* primary-disabled */
+  --color-blue-300: #ffa9bb;
+  --color-blue-400: #ff7591;
+  --color-blue-500: #ff385c;  /* Rausch */
+  --color-blue-600: #e00b41;  /* Rausch active */
+  --color-blue-700: #c11039;
+  --color-blue-800: #9b0f31;
+  --color-blue-900: #7a0c27;
+  --color-blue-950: #4c0518;
+  --color-indigo-50: #fff0f3;
+  --color-indigo-100: #ffe1e8;
+  --color-indigo-200: #ffd1da;
+  --color-indigo-300: #ffa9bb;
+  --color-indigo-400: #ff7591;
+  --color-indigo-500: #ff385c;
+  --color-indigo-600: #e00b41;
+  --color-indigo-700: #c11039;
+  --color-indigo-800: #9b0f31;
+  --color-indigo-900: #7a0c27;
+  --color-indigo-950: #4c0518;
+  --color-sky-50: #fff0f3;
+  --color-sky-100: #ffe1e8;
+  --color-sky-200: #ffd1da;
+  --color-sky-300: #ffa9bb;
+  --color-sky-400: #ff7591;
+  --color-sky-500: #ff385c;
+  --color-sky-600: #e00b41;
+  --color-sky-700: #c11039;
+  --color-sky-800: #9b0f31;
+  --color-sky-900: #7a0c27;
+  --color-sky-950: #4c0518;
+
+  /* Violet / Purple系 → Airbnb Luxe ramp（サブブランド紫 #460479） */
+  --color-violet-50: #f7f0fc;
+  --color-violet-100: #eee0fa;
+  --color-violet-200: #ddc2f2;
+  --color-violet-300: #c49ae6;
+  --color-violet-400: #a469d3;
+  --color-violet-500: #813bbb;
+  --color-violet-600: #611a9c;
+  --color-violet-700: #460479;  /* Luxe */
+  --color-violet-800: #38035f;
+  --color-violet-900: #2b0247;
+  --color-violet-950: #1c012e;
+  --color-purple-50: #f7f0fc;
+  --color-purple-100: #eee0fa;
+  --color-purple-200: #ddc2f2;
+  --color-purple-300: #c49ae6;
+  --color-purple-400: #a469d3;
+  --color-purple-500: #813bbb;
+  --color-purple-600: #611a9c;
+  --color-purple-700: #460479;
+  --color-purple-800: #38035f;
+  --color-purple-900: #2b0247;
+  --color-purple-950: #1c012e;
+
+  /* Red系 → Airbnb error ramp（#c13515 / hover #b32505） */
+  --color-red-50: #fcf1ee;
+  --color-red-100: #f9e0d8;
+  --color-red-200: #f2c3b3;
+  --color-red-300: #e89c83;
+  --color-red-400: #d9694a;
+  --color-red-500: #c13515;
+  --color-red-600: #b32505;
+  --color-red-700: #962004;
+  --color-red-800: #7a1b05;
+  --color-red-900: #611705;
+  --color-red-950: #380b02;
+
+  /* Elevation: 全シャドウを Airbnb の単一階層に collapse */
+  --shadow-2xs: 0 0 0 1px rgb(0 0 0 / 0.02);
+  --shadow-xs: 0 0 0 1px rgb(0 0 0 / 0.02), 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 0 0 1px rgb(0 0 0 / 0.02), 0 1px 3px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 0 0 1px rgb(0 0 0 / 0.02), 0 2px 6px 0 rgb(0 0 0 / 0.04), 0 4px 8px 0 rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 0 0 1px rgb(0 0 0 / 0.02), 0 2px 6px 0 rgb(0 0 0 / 0.04), 0 4px 8px 0 rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 0 0 1px rgb(0 0 0 / 0.02), 0 2px 6px 0 rgb(0 0 0 / 0.04), 0 4px 8px 0 rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 0 0 1px rgb(0 0 0 / 0.02), 0 2px 6px 0 rgb(0 0 0 / 0.04), 0 4px 8px 0 rgb(0 0 0 / 0.1);
+}
+
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.625rem; /* rounded-md=8px(ボタン/入力) / rounded-xl=14px(カード) */
+  --background: #ffffff;            /* canvas */
+  --foreground: #222222;            /* ink */
+  --card: #ffffff;
+  --card-foreground: #222222;
+  --popover: #ffffff;
+  --popover-foreground: #222222;
+  --primary: #ff385c;               /* Rausch */
+  --primary-foreground: #ffffff;
+  --secondary: #f7f7f7;             /* surface-soft */
+  --secondary-foreground: #222222;
+  --muted: #f7f7f7;
+  --muted-foreground: #6a6a6a;      /* muted */
+  --accent: #f7f7f7;
+  --accent-foreground: #222222;
+  --destructive: #c13515;           /* error */
+  --border: #dddddd;                /* hairline */
+  --input: #dddddd;
+  --ring: #222222;                  /* focus = ink, no glow */
+  --chart-1: #ff385c;               /* Rausch */
+  --chart-2: #460479;               /* Luxe */
+  --chart-3: #008489;               /* Babu teal */
+  --chart-4: #fc642d;               /* Arches orange */
+  --chart-5: #222222;               /* Ink */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #222222;
+  --sidebar-primary: #ff385c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f7f7f7;
+  --sidebar-accent-foreground: #222222;
+  --sidebar-border: #ebebeb;
+  --sidebar-ring: #222222;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #1a1a1a;
+  --foreground: #f7f7f7;
+  --card: #222222;
+  --card-foreground: #f7f7f7;
+  --popover: #222222;
+  --popover-foreground: #f7f7f7;
+  --primary: #ff385c;
+  --primary-foreground: #ffffff;
+  --secondary: #2f2f2f;
+  --secondary-foreground: #f7f7f7;
+  --muted: #2f2f2f;
+  --muted-foreground: #929292;
+  --accent: #2f2f2f;
+  --accent-foreground: #f7f7f7;
+  --destructive: #d9694a;
+  --border: #ffffff1a;
+  --input: #ffffff26;
+  --ring: #929292;
+  --chart-1: #ff385c;
+  --chart-2: #c49ae6;
+  --chart-3: #00a699;
+  --chart-4: #fc642d;
+  --chart-5: #f7f7f7;
+  --sidebar: #222222;
+  --sidebar-foreground: #f7f7f7;
+  --sidebar-primary: #ff385c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2f2f2f;
+  --sidebar-accent-foreground: #f7f7f7;
+  --sidebar-border: #ffffff1a;
+  --sidebar-ring: #929292;
+}
+
+/* ===== LP (app/page.tsx) アニメーション ===== */
+@keyframes lp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lp-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes lp-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+.lp-fade-up {
+  opacity: 0;
+  animation: lp-fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.lp-caret {
+  animation: lp-caret 0.9s steps(1) infinite;
+}
+.lp-float {
+  animation: lp-float 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-fade-up {
+    animation: none;
+    opacity: 1;
+  }
+  .lp-float {
+    animation: none;
+  }
 }
 
 @layer base {
@@ -122,5 +272,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "palt"; /* 和文の詰め組みでCereal風の親密さを出す */
+  }
+  ::selection {
+    background: #ffd1da;
+    color: #222222;
   }
 }

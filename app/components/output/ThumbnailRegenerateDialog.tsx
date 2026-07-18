@@ -14,12 +14,16 @@ import {
 import { Sparkles, Upload, X, Check, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { fileToCompressedDataUrl } from "@/lib/client-image";
+import { ThumbnailSlotOption } from "@/lib/thumbnail-prompts";
 
 interface ThumbnailRegenerateDialogProps {
   jobId: string;
   platform: string;
   currentUrls: string[];
   defaultPrompt?: string;
+  // Indeed 用: スロット（1〜3枚目）別の基本プロンプト。指定時はスロット選択 + 追加指示 UI になる
+  slotOptions?: ThumbnailSlotOption[];
+  defaultSlotIndex?: number;
   onGenerated: (urls: string[]) => void;
 }
 
@@ -34,20 +38,58 @@ export function ThumbnailRegenerateDialog({
   platform,
   currentUrls,
   defaultPrompt = "",
+  slotOptions,
+  defaultSlotIndex = 0,
   onGenerated,
 }: ThumbnailRegenerateDialogProps) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [extraPrompt, setExtraPrompt] = useState("");
+  const [slotIndex, setSlotIndex] = useState(0);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [count, setCount] = useState(1);
   const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // スロット切替・参考画像変更時に、ユーザー編集済みプロンプトを勝手に上書きしないための記録
+  const lastAutoPromptRef = useRef("");
+
+  const slotMode = !!slotOptions?.length;
+
+  function slotBasePrompt(index: number, reference: string | null): string {
+    const option = slotOptions![index];
+    return reference && option.referencePrompt ? option.referencePrompt : option.prompt;
+  }
+
+  function applySlot(index: number, reference: string | null) {
+    const base = slotBasePrompt(index, reference);
+    setSlotIndex(index);
+    setPrompt(base);
+    lastAutoPromptRef.current = base;
+  }
 
   function handleOpen() {
     setOpen(true);
-    if (!prompt) setPrompt(defaultPrompt);
+    if (slotMode) {
+      const index = Math.min(Math.max(defaultSlotIndex, 0), slotOptions!.length - 1);
+      // 未編集（自動セットのまま or 空）の場合のみ選択中スロットに合わせて更新
+      if (!prompt || prompt === lastAutoPromptRef.current) {
+        applySlot(index, referenceImage);
+      }
+    } else if (!prompt) {
+      setPrompt(defaultPrompt);
+    }
+  }
+
+  function updateReferenceImage(next: string | null) {
+    setReferenceImage(next);
+    // 基本プロンプトが未編集なら、参考画像の有無に合わせたスロットプロンプトへ差し替え
+    if (slotMode && prompt === lastAutoPromptRef.current) {
+      const base = slotBasePrompt(slotIndex, next);
+      setPrompt(base);
+      lastAutoPromptRef.current = base;
+    }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -55,7 +97,7 @@ export function ThumbnailRegenerateDialog({
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file?.type.startsWith("image/")) return;
     try {
-      setReferenceImage(await fileToCompressedDataUrl(file));
+      updateReferenceImage(await fileToCompressedDataUrl(file));
     } catch {
       toast.error("画像の読み込みに失敗しました");
     }
@@ -66,6 +108,10 @@ export function ThumbnailRegenerateDialog({
     setGenerating(true);
     setResults([]);
     setSelected(new Set());
+    const finalPrompt =
+      slotMode && extraPrompt.trim()
+        ? `${prompt.trim()}\n\n【追加の指示（最優先で反映すること）】\n${extraPrompt.trim()}`
+        : prompt.trim();
     try {
       const res = await fetch("/api/thumbnails/regenerate", {
         method: "POST",
@@ -73,7 +119,7 @@ export function ThumbnailRegenerateDialog({
         body: JSON.stringify({
           jobId,
           platform,
-          prompt: prompt.trim(),
+          prompt: finalPrompt,
           referenceImage,
           count,
         }),
@@ -132,6 +178,31 @@ export function ThumbnailRegenerateDialog({
           </DialogHeader>
 
           <div className="space-y-5 mt-2">
+            {/* スロット選択（Indeed のみ） */}
+            {slotMode && (
+              <div className="space-y-2">
+                <Label className="text-xs">作り直すサムネイル</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {slotOptions!.map((option, i) => (
+                    <button
+                      key={i}
+                      onClick={() => applySlot(i, referenceImage)}
+                      className={`rounded-lg border-2 p-2 text-left transition-all ${
+                        i === slotIndex
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      <span className="text-xs font-medium block">{option.label}</span>
+                      <span className="text-[10px] text-muted-foreground leading-tight block mt-0.5">
+                        {option.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 参考画像の選択 */}
             <div className="space-y-2">
               <Label className="text-xs">参考画像（任意）</Label>
@@ -147,7 +218,7 @@ export function ThumbnailRegenerateDialog({
                   <button
                     key={index}
                     onClick={() =>
-                      setReferenceImage(referenceImage === url ? null : url)
+                      updateReferenceImage(referenceImage === url ? null : url)
                     }
                     className={`shrink-0 relative w-24 aspect-video rounded overflow-hidden border-2 transition-all ${
                       referenceImage === url
@@ -176,7 +247,7 @@ export function ThumbnailRegenerateDialog({
                       className="w-full h-full object-cover"
                     />
                     <button
-                      onClick={() => setReferenceImage(null)}
+                      onClick={() => updateReferenceImage(null)}
                       className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center"
                       aria-label="参考画像を削除"
                     >
@@ -193,13 +264,17 @@ export function ThumbnailRegenerateDialog({
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">
-                既存のサムネイルをクリックで選択、または画像をアップロードできます
+                {slotMode
+                  ? "既存のサムネイルをクリックで選択、または事業所の写真などをアップロードできます"
+                  : "既存のサムネイルをクリックで選択、または画像をアップロードできます"}
               </p>
             </div>
 
             {/* プロンプト */}
             <div className="space-y-2">
-              <Label className="text-xs">生成プロンプト</Label>
+              <Label className="text-xs">
+                {slotMode ? "基本プロンプト（スロットに合わせて自動設定・編集可）" : "生成プロンプト"}
+              </Label>
               <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -207,6 +282,22 @@ export function ThumbnailRegenerateDialog({
                 placeholder="どんなサムネイルを生成するか日本語で入力してください"
               />
             </div>
+
+            {/* 追加指示（スロットモードのみ） */}
+            {slotMode && (
+              <div className="space-y-2">
+                <Label className="text-xs">追加の指示（任意）</Label>
+                <Textarea
+                  value={extraPrompt}
+                  onChange={(e) => setExtraPrompt(e.target.value)}
+                  rows={2}
+                  placeholder="例: もっと笑顔を強調して / 背景を明るくして / 文字を大きく"
+                />
+                <p className="text-xs text-muted-foreground">
+                  入力した指示は基本プロンプトより優先して反映されます
+                </p>
+              </div>
+            )}
 
             {/* 生成枚数 */}
             <div className="space-y-2">

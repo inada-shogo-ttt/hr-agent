@@ -25,11 +25,22 @@ interface OfficeGroup {
 export default function JobsPage() {
   const [offices, setOffices] = useState<OfficeGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/jobs")
-      .then((r) => r.json())
-      .then((jobs: JobEntry[]) => {
+      .then(async (r) => {
+        const body = await r.json().catch(() => null);
+        if (!r.ok || !Array.isArray(body)) {
+          throw new Error(
+            body?.error === "Unauthorized"
+              ? "認証情報が確認できませんでした。ユーザーに組織（orgId）が設定されているか確認してください。"
+              : body?.error || `求人一覧の取得に失敗しました (${r.status})`
+          );
+        }
+        return body as JobEntry[];
+      })
+      .then((jobs) => {
         // officeId でグループ化
         const groups = new Map<string, OfficeGroup>();
         for (const job of jobs) {
@@ -53,11 +64,15 @@ export default function JobsPage() {
         }
         setOffices(Array.from(groups.values()));
         setLoading(false);
+      })
+      .catch((e: Error) => {
+        setError(e.message);
+        setLoading(false);
       });
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -82,6 +97,13 @@ export default function JobsPage() {
               </Card>
             ))}
           </div>
+        ) : error ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-muted-foreground">{error}</p>
+            </CardContent>
+          </Card>
         ) : offices.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">

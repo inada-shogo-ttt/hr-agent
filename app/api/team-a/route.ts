@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { runManagerAgent } from "@/lib/agents/manager";
 import { runTrendResearchAgent } from "@/lib/agents/trend-research";
 import { runTrendAnalysisAgent } from "@/lib/agents/trend-analysis";
-import { runReferenceSelectionAgent } from "@/lib/agents/reference-selection";
 import { runManuscriptWritingAgent } from "@/lib/agents/manuscript-writing";
 import { runThumbnailGenerationAgent } from "@/lib/agents/thumbnail-generation";
 import { runFactCheckAgent } from "@/lib/agents/fact-check";
@@ -12,6 +11,13 @@ import { SSEEvent, AgentId } from "@/lib/agents/types";
 import { ReferencePostingData } from "@/types/reference";
 import { supabase } from "@/lib/supabase";
 import { getFormattedKnowledge } from "@/lib/shared-knowledge";
+import { getPlatformGuidelines } from "@/lib/platform-guidelines";
+import { getCachedTrendResearch, saveTrendResearch } from "@/lib/trend-cache";
+import { getOwnedJob } from "@/lib/org-scope";
+import { startCostTracking, getTrackedCostYen } from "@/lib/api-cost";
+import { requireAuth } from "@/lib/auth-guard";
+import { getOrganization, canRunAgents, recordUsage } from "@/lib/billing/usage";
+import { settlePendingOverages } from "@/lib/billing/overage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5分
@@ -30,9 +36,41 @@ function sendEvent(
   controller.enqueue(new TextEncoder().encode(createSSEMessage(event)));
 }
 
+function sseErrorResponse(message: string, code: string): Response {
+  const event: SSEEvent = {
+    type: "workflow_error",
+    agentId: "manager",
+    message,
+    data: { code },
+    timestamp: new Date().toISOString(),
+  };
+  return new Response(createSSEMessage(event), {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
+  const org = await getOrganization(auth.user.orgId);
+  if (!org) {
+    return sseErrorResponse("組織情報が見つかりません", "org_not_found");
+  }
+  if (!canRunAgents(org)) {
+    return sseErrorResponse(
+      "プラン契約が必要です。設定 > プランからご契約ください",
+      "subscription_required"
+    );
+  }
+
   const body = await request.json();
   const jobPostingInput = body as JobPostingInput;
+  const usageJobId = typeof body.jobId === "string" ? body.jobId : null;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -86,7 +124,23 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        // DB から参考原稿を取得（同業種・同職種でフィルタ）
+        // API 利用実費の集計を開始(このリクエスト内の Claude / 画像生成呼び出しが対象)
+        startCostTracking();
+
+        // 出力対象媒体（未指定・空は全媒体 = 後方互換）
+        const allPlatforms = ["indeed", "airwork", "jobmedley", "hellowork"] as const;
+        const targetPlatforms =
+          jobPostingInput.selectedPlatforms && jobPostingInput.selectedPlatforms.length > 0
+            ? allPlatforms.filter((p) => jobPostingInput.selectedPlatforms!.includes(p))
+            : [...allPlatforms];
+        const thumbnailPlatforms = targetPlatforms.filter(
+          (p): p is "indeed" | "airwork" | "jobmedley" => p !== "hellowork"
+        );
+
+        // 媒体別ガイドライン（システム設定）をロード。DB未保存・取得失敗時はコード内デフォルト
+        const guidelines = await getPlatformGuidelines(targetPlatforms);
+
+        // DB からシステム参考原稿を取得（同業種・同職種でフィルタ）
         let userReferences: ReferencePostingData[] = [];
         try {
           const industry = jobPostingInput.common.industry;
@@ -94,7 +148,7 @@ export async function POST(request: NextRequest) {
 
           // 優先度: 同職種&同業種 → 同職種 → 同業種 → フォールバック
           let query = supabase
-            .from("ReferencePosting")
+            .from("SystemReferencePosting")
             .select("*")
             .order("createdAt", { ascending: false });
 
@@ -108,7 +162,7 @@ export async function POST(request: NextRequest) {
           let allRefs = refs || [];
           if (allRefs.length < 3) {
             const { data: fallbackRefs } = await supabase
-              .from("ReferencePosting")
+              .from("SystemReferencePosting")
               .select("*")
               .order("createdAt", { ascending: false })
               .limit(5);
@@ -131,6 +185,55 @@ export async function POST(request: NextRequest) {
           }
         } catch (e) {
           console.warn("[team-a] 参考原稿の取得に失敗:", e);
+        }
+
+        // 流用作成: 流用元の確定原稿を最優先の参考原稿として注入
+        const reuseSourceJobId =
+          typeof body.reuseSourceJobId === "string" ? body.reuseSourceJobId : null;
+        if (reuseSourceJobId) {
+          try {
+            const source = await getOwnedJob(reuseSourceJobId, auth.user, "read");
+            if (!("error" in source)) {
+              const { data: sourceRecords } = await supabase
+                .from("JobRecord")
+                .select("outputData")
+                .eq("jobId", reuseSourceJobId)
+                .eq("type", "team-a")
+                .order("createdAt", { ascending: false })
+                .limit(1);
+              const outputData = sourceRecords?.[0]?.outputData;
+              const sourceOutput = outputData
+                ? (JSON.parse(outputData) as Record<string, Record<string, unknown>>)
+                : null;
+              if (sourceOutput) {
+                const reuseRefs: ReferencePostingData[] = [];
+                for (const p of targetPlatforms) {
+                  const posting = sourceOutput[p];
+                  if (!posting) continue;
+                  const postingData: Record<string, string> = {};
+                  for (const [k, v] of Object.entries(posting)) {
+                    if (typeof v === "string" && v.trim()) postingData[k] = v;
+                  }
+                  if (Object.keys(postingData).length === 0) continue;
+                  reuseRefs.push({
+                    id: `reuse-${p}`,
+                    title: "流用元の確定原稿（この構成・訴求の書き方を最優先で踏襲する）",
+                    platform: p,
+                    industry: jobPostingInput.common.industry || "",
+                    jobType: jobPostingInput.common.jobTitle || "",
+                    postingData,
+                    performance: "流用元として選択された実績原稿",
+                  });
+                }
+                if (reuseRefs.length > 0) {
+                  userReferences = [...reuseRefs, ...userReferences].slice(0, 8);
+                  console.log(`[team-a] 流用元原稿を${reuseRefs.length}媒体分ロードしました`);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("[team-a] 流用元原稿の取得に失敗:", e);
+          }
         }
 
         // 共有ナレッジを取得（職種×媒体の成功パターン）
@@ -161,18 +264,30 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Step 2: Trend Research Agent
+        // Step 2: Trend Research Agent（同条件の調査結果は7日間キャッシュ）
         startAgent("trend-research", "求人トレンドのWeb調査を開始します");
-        const trendResearch = await runTrendResearchAgent({
+        const trendParams = {
           industry: jobPostingInput.common.industry,
           jobCategory: jobPostingInput.common.jobTitle,
           prefecture: jobPostingInput.common.prefecture,
           employmentType: jobPostingInput.common.employmentType,
-        });
-        completeAgent("trend-research", "トレンド調査完了", {
-          resultCount: trendResearch.results.length,
-          summary: trendResearch.summary,
-        });
+        };
+        let trendResearch = await getCachedTrendResearch(trendParams);
+        const trendFromCache = !!trendResearch;
+        if (!trendResearch) {
+          trendResearch = await runTrendResearchAgent(trendParams);
+          await saveTrendResearch(trendParams, trendResearch);
+        }
+        completeAgent(
+          "trend-research",
+          trendFromCache
+            ? "トレンド調査完了（7日以内の調査結果を再利用）"
+            : "トレンド調査完了",
+          {
+            resultCount: trendResearch.results.length,
+            summary: trendResearch.summary,
+          }
+        );
 
         // Step 3: Trend Analysis Agent
         startAgent("trend-analysis", "トレンドデータの分析を開始します");
@@ -185,34 +300,53 @@ export async function POST(request: NextRequest) {
           recommendedKeywords: trendAnalysis.recommendedKeywords,
         });
 
-        // Step 4: Reference Selection Agent
-        startAgent("reference-selection", "参考原稿の選定を開始します");
-        const referenceSelection = await runReferenceSelectionAgent({
-          trendAnalysis,
-          jobPostingInput,
-          userReferences: userReferences.length > 0 ? userReferences : undefined,
-          sharedKnowledge: sharedKnowledgeText || undefined,
-        });
-        completeAgent("reference-selection", "参考原稿選定完了", {
-          referencesCount: referenceSelection.selectedReferences.length,
-        });
+        // Step 4: 参考原稿の選定
+        // 媒体設定(フォーマット/アルゴリズム/制約)とシステム参考原稿を執筆プロンプトへ
+        // 直接注入するため、LLMによる参考パターン生成は廃止(直列1コールぶん短縮)
+        startAgent("reference-selection", "参考原稿を選定しています");
+        completeAgent(
+          "reference-selection",
+          userReferences.length > 0
+            ? `参考原稿選定完了（${userReferences.length}件を参照）`
+            : "参考原稿選定完了（該当する登録原稿なし）",
+          { referencesCount: userReferences.length }
+        );
 
         // Step 5 & 6: Manuscript Writing + Thumbnail Generation (並列)
-        startAgent("manuscript-writing", "4媒体の求人原稿を執筆開始します");
-        startAgent("thumbnail-generation", "サムネイル生成を開始します");
+        startAgent("manuscript-writing", `${targetPlatforms.length}媒体の求人原稿を執筆開始します`);
+        startAgent(
+          "thumbnail-generation",
+          thumbnailPlatforms.length > 0
+            ? "サムネイル生成を開始します"
+            : "サムネイル対象媒体がないため生成をスキップします"
+        );
 
         const socialInsuranceText = Array.isArray(jobPostingInput.common.socialInsurance)
           ? jobPostingInput.common.socialInsurance.join(", ")
           : String(jobPostingInput.common.socialInsurance || "");
+
+        const platformLabels: Record<string, string> = {
+          indeed: "Indeed",
+          airwork: "AirWork",
+          jobmedley: "JobMedley",
+          hellowork: "ハローワーク",
+        };
 
         const [manuscriptResult, thumbnailOutput] = await Promise.all([
           runManuscriptWritingAgent({
             jobPostingInput,
             managerOutput,
             trendAnalysis,
-            referenceSelection,
             userReferences: userReferences.length > 0 ? userReferences : undefined,
             sharedKnowledge: sharedKnowledgeText || undefined,
+            guidelines,
+          }, (platform, preview) => {
+            // 媒体別の書き上がりをライブプレビューとして配信
+            progressAgent(
+              "manuscript-writing",
+              `${platformLabels[platform] || platform}の原稿が書き上がりました`,
+              { platform, preview }
+            );
           }).catch((err) => {
             console.error("[team-a] manuscript-writing failed:", err);
             errorAgent("manuscript-writing", err instanceof Error ? err.message : "原稿生成エラー");
@@ -220,10 +354,13 @@ export async function POST(request: NextRequest) {
           }),
           runThumbnailGenerationAgent({
             jobPostingInput,
+            platforms: thumbnailPlatforms,
             manuscript: {
               indeed: {
                 jobTitle: jobPostingInput.common.jobTitle,
-                catchphrase: "生成中...",
+                // 原稿執筆と並列実行のため確定キャッチコピーは無い。空にして
+                // appealPoints → 「◯◯募集中」のフォールバックに任せる（画像に焼き込まれるため）
+                catchphrase: "",
                 jobDescription: jobPostingInput.common.jobDescription,
                 appealPoints: "",
                 requirements: jobPostingInput.common.requirements,
@@ -234,13 +371,13 @@ export async function POST(request: NextRequest) {
               },
               airwork: {
                 jobTitle: jobPostingInput.common.jobTitle,
-                catchphrase: "生成中...",
+                catchphrase: "",
                 jobDescription: jobPostingInput.common.jobDescription,
                 requirements: jobPostingInput.common.requirements,
                 selectionProcess: "",
               },
               jobmedley: {
-                appealTitle: "生成中...",
+                appealTitle: "",
                 appealText: "",
                 jobDescription: jobPostingInput.common.jobDescription,
                 employmentTypeAndSalary: "",
@@ -292,7 +429,7 @@ export async function POST(request: NextRequest) {
         ]);
 
         const manuscriptOutput = manuscriptResult;
-        completeAgent("manuscript-writing", "原稿執筆完了（4媒体）");
+        completeAgent("manuscript-writing", `原稿執筆完了（${targetPlatforms.length}媒体）`);
         const platformThumbnails = thumbnailOutput.platformThumbnails;
         const totalThumbnailCount =
           platformThumbnails.indeed.length +
@@ -308,6 +445,7 @@ export async function POST(request: NextRequest) {
         const factCheckOutput = await runFactCheckAgent({
           jobPostingInput,
           manuscript: manuscriptOutput,
+          guidelines,
         });
         completeAgent("fact-check", factCheckOutput.summary, {
           issueCount: factCheckOutput.issues.length,
@@ -318,7 +456,8 @@ export async function POST(request: NextRequest) {
         const { common } = jobPostingInput;
         const finalManuscript = factCheckOutput.correctedManuscript;
 
-        const countChars = (text: string) => text.length;
+        // ファクトチェックのJSON修復でフィールドが欠落してもワークフロー全体を落とさない
+        const countChars = (text?: string) => (text ?? "").length;
 
         // 固定残業代の表示文字列
         const fixedOvertimeText = common.fixedOvertimePay?.hasFixed
@@ -339,20 +478,26 @@ export async function POST(request: NextRequest) {
         const jmInput = jobPostingInput.jobmedley || {};
         const hm = common.hiringManager || {};
 
+        // 生成された媒体のみ最終出力に含める
+        const fmIndeed = finalManuscript.indeed;
+        const fmAirwork = finalManuscript.airwork;
+        const fmJobmedley = finalManuscript.jobmedley;
+        const fmHellowork = finalManuscript.hellowork;
+
         const finalOutput: AllPlatformPostings = {
-          indeed: {
+          ...(fmIndeed ? { indeed: {
             companyName: common.companyName,
             postalCode: common.postalCode,
-            jobTitle: finalManuscript.indeed.jobTitle,
-            catchphrase: finalManuscript.indeed.catchphrase,
+            jobTitle: fmIndeed.jobTitle,
+            catchphrase: fmIndeed.catchphrase,
             numberOfHires: common.numberOfHires ? `${common.numberOfHires}名` : "若干名",
             location: `${common.prefecture}${common.city}${common.address || ""}`,
             employmentType: common.employmentType,
             salary: `${common.salaryType} ${Number(common.salaryMin || 0).toLocaleString()}円${common.salaryMax ? `〜${Number(common.salaryMax).toLocaleString()}円` : ""}`,
             salaryDisplayType: common.salaryDisplayType,
             workingHours: common.workingHours,
-            socialInsurance: finalManuscript.indeed.socialInsurance,
-            probationPeriod: finalManuscript.indeed.probationPeriod,
+            socialInsurance: fmIndeed.socialInsurance,
+            probationPeriod: fmIndeed.probationPeriod,
             fixedOvertimePay: fixedOvertimeText,
             monthlyWorkingHours: common.monthlyWorkingHours ? `月平均${common.monthlyWorkingHours}時間` : undefined,
             smokingPolicy: common.smokingPolicy,
@@ -362,35 +507,35 @@ export async function POST(request: NextRequest) {
             applicationMethod: idInput.applicationMethod,
             applicationUrl: idInput.applicationUrl,
             screeningQuestions: idInput.screeningQuestions,
-            jobDescription: finalManuscript.indeed.jobDescription,
-            appealPoints: finalManuscript.indeed.appealPoints,
-            requirements: finalManuscript.indeed.requirements,
-            holidays: finalManuscript.indeed.holidays,
-            access: finalManuscript.indeed.access,
-            benefits: finalManuscript.indeed.benefits,
+            jobDescription: fmIndeed.jobDescription,
+            appealPoints: fmIndeed.appealPoints,
+            requirements: fmIndeed.requirements,
+            holidays: fmIndeed.holidays,
+            access: fmIndeed.access,
+            benefits: fmIndeed.benefits,
             featureTags: idInput.featureTags,
             thumbnailUrls: platformThumbnails.indeed,
             recruitmentBudget: idInput.recruitmentBudget?.toString(),
             charCounts: {
-              jobTitle: countChars(finalManuscript.indeed.jobTitle),
-              catchphrase: countChars(finalManuscript.indeed.catchphrase),
-              jobDescription: countChars(finalManuscript.indeed.jobDescription),
-              appealPoints: countChars(finalManuscript.indeed.appealPoints),
-              requirements: countChars(finalManuscript.indeed.requirements),
+              jobTitle: countChars(fmIndeed.jobTitle),
+              catchphrase: countChars(fmIndeed.catchphrase),
+              jobDescription: countChars(fmIndeed.jobDescription),
+              appealPoints: countChars(fmIndeed.appealPoints),
+              requirements: countChars(fmIndeed.requirements),
             },
-          },
-          airwork: {
-            jobTitle: finalManuscript.airwork.jobTitle,
-            jobDescription: finalManuscript.airwork.jobDescription,
+          } } : {}),
+          ...(fmAirwork ? { airwork: {
+            jobTitle: fmAirwork.jobTitle,
+            jobDescription: fmAirwork.jobDescription,
             location: `${common.prefecture}${common.city}`,
-            requirements: finalManuscript.airwork.requirements,
+            requirements: fmAirwork.requirements,
             numberOfHires: common.numberOfHires ? `${common.numberOfHires}名` : "若干名",
             salary: `${common.salaryType} ${Number(common.salaryMin || 0).toLocaleString()}円${common.salaryMax ? `〜${Number(common.salaryMax).toLocaleString()}円` : ""}`,
             salaryDisplayType: common.salaryDisplayType,
             holidays: common.holidays,
             socialInsurance: Array.isArray(common.socialInsurance) ? common.socialInsurance.join(", ") : String(common.socialInsurance || ""),
             benefits: common.benefits,
-            selectionProcess: finalManuscript.airwork.selectionProcess,
+            selectionProcess: fmAirwork.selectionProcess,
             trialPeriod: airworkTrialText,
             applicationReceiveMethod: (airInput.applicationReceiveMethod || ["Web"]).join("、"),
             applicantInfoToGet: (airInput.applicantInfoToGet || ["氏名", "連絡先"]).join("、"),
@@ -408,24 +553,24 @@ export async function POST(request: NextRequest) {
             smokingPolicy: common.smokingPolicy,
             thumbnailUrls: platformThumbnails.airwork,
             charCounts: {
-              jobTitle: countChars(finalManuscript.airwork.jobTitle),
-              jobDescription: countChars(finalManuscript.airwork.jobDescription),
-              requirements: countChars(finalManuscript.airwork.requirements),
+              jobTitle: countChars(fmAirwork.jobTitle),
+              jobDescription: countChars(fmAirwork.jobDescription),
+              requirements: countChars(fmAirwork.requirements),
             },
-          },
-          jobmedley: {
-            appealTitle: finalManuscript.jobmedley.appealTitle,
-            appealText: finalManuscript.jobmedley.appealText,
-            jobDescription: finalManuscript.jobmedley.jobDescription,
-            employmentTypeAndSalary: finalManuscript.jobmedley.employmentTypeAndSalary,
+          } } : {}),
+          ...(fmJobmedley ? { jobmedley: {
+            appealTitle: fmJobmedley.appealTitle,
+            appealText: fmJobmedley.appealText,
+            jobDescription: fmJobmedley.jobDescription,
+            employmentTypeAndSalary: fmJobmedley.employmentTypeAndSalary,
             benefits: common.benefits,
-            trainingSystem: finalManuscript.jobmedley.trainingSystem,
-            workingHours: finalManuscript.jobmedley.workingHours,
+            trainingSystem: fmJobmedley.trainingSystem,
+            workingHours: fmJobmedley.workingHours,
             holidays: common.holidays,
-            requirements: finalManuscript.jobmedley.requirements,
-            welcomeRequirements: finalManuscript.jobmedley.welcomeRequirements,
-            access: finalManuscript.jobmedley.access,
-            selectionProcess: finalManuscript.jobmedley.selectionProcess,
+            requirements: fmJobmedley.requirements,
+            welcomeRequirements: fmJobmedley.welcomeRequirements,
+            access: fmJobmedley.access,
+            selectionProcess: fmJobmedley.selectionProcess,
             facilityType: jmInput.facilityType,
             hiringManagerName: hm.name,
             contactPhone: hm.phone,
@@ -435,12 +580,12 @@ export async function POST(request: NextRequest) {
             workplaceAtmosphere: jmInput.workplaceAtmosphere,
             thumbnailUrls: platformThumbnails.jobmedley,
             charCounts: {
-              appealTitle: countChars(finalManuscript.jobmedley.appealTitle),
-              appealText: countChars(finalManuscript.jobmedley.appealText),
-              jobDescription: countChars(finalManuscript.jobmedley.jobDescription),
+              appealTitle: countChars(fmJobmedley.appealTitle),
+              appealText: countChars(fmJobmedley.appealText),
+              jobDescription: countChars(fmJobmedley.jobDescription),
             },
-          },
-          hellowork: {
+          } } : {}),
+          ...(fmHellowork ? { hellowork: {
             // 企業基本情報
             corporateNumber: hwInput.corporateNumber || "未入力",
             companyName: common.companyName,
@@ -459,72 +604,72 @@ export async function POST(request: NextRequest) {
             smokingPolicy: smokingPolicyText,
             jobCategoryType: hwInput.jobCategoryType || "一般",
             // 仕事の内容
-            jobTitle: finalManuscript.hellowork.jobTitle,
-            jobDescription: finalManuscript.hellowork.jobDescription,
+            jobTitle: fmHellowork.jobTitle,
+            jobDescription: fmHellowork.jobDescription,
             employmentType: common.employmentType,
-            employmentPeriod: finalManuscript.hellowork.employmentPeriod,
-            contractRenewal: finalManuscript.hellowork.contractRenewal,
-            workplaceChange: finalManuscript.hellowork.workplaceChange,
-            jobContentChange: finalManuscript.hellowork.jobContentChange,
-            transferPossibility: finalManuscript.hellowork.transferPossibility,
+            employmentPeriod: fmHellowork.employmentPeriod,
+            contractRenewal: fmHellowork.contractRenewal,
+            workplaceChange: fmHellowork.workplaceChange,
+            jobContentChange: fmHellowork.jobContentChange,
+            transferPossibility: fmHellowork.transferPossibility,
             carCommute: hwInput.carCommute,
             hasParking: hwInput.hasParking ? "あり" : undefined,
             // 賃金
             wageType: common.salaryType,
-            wageAmount: finalManuscript.hellowork.wageAmount,
+            wageAmount: fmHellowork.wageAmount,
             fixedOvertimePay: fixedOvertimeText,
-            allowances: finalManuscript.hellowork.allowances,
-            commutingAllowance: finalManuscript.hellowork.commutingAllowance,
-            bonus: finalManuscript.hellowork.bonus,
-            raise: finalManuscript.hellowork.raise,
-            salaryClosingDay: finalManuscript.hellowork.salaryClosingDay,
-            salaryPayDay: finalManuscript.hellowork.salaryPayDay,
+            allowances: fmHellowork.allowances,
+            commutingAllowance: fmHellowork.commutingAllowance,
+            bonus: fmHellowork.bonus,
+            raise: fmHellowork.raise,
+            salaryClosingDay: fmHellowork.salaryClosingDay,
+            salaryPayDay: fmHellowork.salaryPayDay,
             // 労働時間
-            workingHours: finalManuscript.hellowork.workingHours,
-            overtime: finalManuscript.hellowork.overtime,
+            workingHours: fmHellowork.workingHours,
+            overtime: fmHellowork.overtime,
             overtimeAvg: hwInput.overtimeAvg?.toString(),
-            breakTime: finalManuscript.hellowork.breakTime,
-            holidays: finalManuscript.hellowork.holidays,
-            annualHolidays: finalManuscript.hellowork.annualHolidays,
-            annualLeave: finalManuscript.hellowork.annualLeave,
+            breakTime: fmHellowork.breakTime,
+            holidays: fmHellowork.holidays,
+            annualHolidays: fmHellowork.annualHolidays,
+            annualLeave: fmHellowork.annualLeave,
             specialClause36: hwInput.specialClause36,
             // 保険・年金・定年
-            insurance: finalManuscript.hellowork.insurance,
-            pension: finalManuscript.hellowork.pension,
-            trialPeriod: finalManuscript.hellowork.trialPeriod,
-            retirementAge: finalManuscript.hellowork.retirementAge,
-            retirementBenefit: finalManuscript.hellowork.retirementBenefit,
+            insurance: fmHellowork.insurance,
+            pension: fmHellowork.pension,
+            trialPeriod: fmHellowork.trialPeriod,
+            retirementAge: fmHellowork.retirementAge,
+            retirementBenefit: fmHellowork.retirementBenefit,
             reEmployment: hwInput.reEmployment ? "あり" : undefined,
             childcareLeaveActual: hwInput.childcareLeaveActual,
             careLeaveActual: hwInput.careLeaveActual,
             nursingLeaveActual: hwInput.nursingLeaveActual,
-            specialNotes: finalManuscript.hellowork.specialNotes,
+            specialNotes: fmHellowork.specialNotes,
             // 応募条件
-            requirements: finalManuscript.hellowork.requirements,
-            requiredLicenses: finalManuscript.hellowork.requiredLicenses,
+            requirements: fmHellowork.requirements,
+            requiredLicenses: fmHellowork.requiredLicenses,
             pcSkills: hwInput.pcSkills,
             educationLevel: hwInput.educationLevel,
             ageRestriction: hwInput.ageRestriction || "不問",
             // 選考
             numberOfHires: common.numberOfHires ? `${common.numberOfHires}人` : "１人",
-            selectionMethod: finalManuscript.hellowork.selectionMethod,
-            selectionResultDays: finalManuscript.hellowork.selectionResultDays,
-            applicationDocuments: finalManuscript.hellowork.applicationDocuments,
-            applicationMethodHw: finalManuscript.hellowork.applicationMethodHw,
+            selectionMethod: fmHellowork.selectionMethod,
+            selectionResultDays: fmHellowork.selectionResultDays,
+            applicationDocuments: fmHellowork.applicationDocuments,
+            applicationMethodHw: fmHellowork.applicationMethodHw,
             hiringManagerName: hm.name || "未入力",
             hiringManagerPosition: hm.position,
-            hiringManagerContact: finalManuscript.hellowork.hiringManagerContact,
+            hiringManagerContact: fmHellowork.hiringManagerContact,
             selectionNotification: "面接選考結果通知",
             // 公開範囲
             publishingScope: hwInput.publishingScope || "1.求人情報を公開する（事業所名等を含む）",
-            remarks: finalManuscript.hellowork.remarks,
+            remarks: fmHellowork.remarks,
             charCounts: {
-              jobTitle: countChars(finalManuscript.hellowork.jobTitle),
-              jobDescription: countChars(finalManuscript.hellowork.jobDescription),
-              requirements: countChars(finalManuscript.hellowork.requirements),
-              remarks: countChars(finalManuscript.hellowork.remarks),
+              jobTitle: countChars(fmHellowork.jobTitle),
+              jobDescription: countChars(fmHellowork.jobDescription),
+              requirements: countChars(fmHellowork.requirements),
+              remarks: countChars(fmHellowork.remarks),
             },
-          },
+          } } : {}),
           thumbnailUrls: [
             ...platformThumbnails.indeed,
             ...platformThumbnails.airwork,
@@ -532,14 +677,28 @@ export async function POST(request: NextRequest) {
           ],
           platformThumbnails,
           visualStyle: thumbnailOutput.visualStyle,
+          apiCostYen: getTrackedCostYen() ?? undefined,
           generatedAt: now(),
         };
+
+        // 実行成功時のみ課金記録(失敗しても原稿生成は完了扱い)
+        try {
+          await recordUsage({
+            org,
+            userId: auth.user.id,
+            kind: "team_a",
+            jobId: usageJobId,
+          });
+          await settlePendingOverages(org);
+        } catch (e) {
+          console.error("[team-a] 課金記録に失敗:", e);
+        }
 
         // ワークフロー完了
         sendEvent(controller, {
           type: "workflow_complete",
           agentId: "platform-formatter",
-          message: "全媒体の求人原稿が完成しました",
+          message: `選択した${targetPlatforms.length}媒体の求人原稿が完成しました`,
           data: finalOutput,
           timestamp: now(),
         });

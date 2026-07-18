@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { regenerateThumbnails, ThumbnailPlatform } from "@/lib/nanobanana";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -28,6 +29,9 @@ async function resolveReferenceImage(referenceImage: string | null | undefined):
 
 // POST /api/thumbnails/regenerate — プロンプト＋参考画像からサムネイルを再生成し Storage に保存
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   const { jobId, platform, prompt, referenceImage, count } = await request.json();
 
   if (!jobId || !platform || !prompt?.trim()) {

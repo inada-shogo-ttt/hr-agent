@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,8 @@ import { HelloWorkFields } from "./HelloWorkFields";
 import { SmartDefaultsSelector } from "./SmartDefaultsSelector";
 import { AIInputMode } from "./AIInputMode";
 import { JobPostingInput, CommonJobInfo } from "@/types/job-posting";
-import { Sparkles, ClipboardEdit, ImageIcon, X } from "lucide-react";
+import { Platform } from "@/types/platform";
+import { Sparkles, ClipboardEdit, ImageIcon, X, Check } from "lucide-react";
 import { fileToCompressedDataUrl } from "@/lib/client-image";
 import { toast } from "sonner";
 
@@ -48,13 +49,24 @@ const defaultCommonInfo: CommonJobInfo = {
   competitiveAdvantage: "",
 };
 
+const PLATFORM_OPTIONS: { value: Platform; label: string; description: string }[] = [
+  { value: "indeed", label: "インディード", description: "サムネイル付き" },
+  { value: "airwork", label: "エアワーク", description: "サムネイル付き" },
+  { value: "jobmedley", label: "ジョブメドレー", description: "サムネイル付き" },
+  { value: "hellowork", label: "ハローワーク", description: "求人票形式" },
+];
+
+const ALL_PLATFORMS: Platform[] = PLATFORM_OPTIONS.map((o) => o.value);
+
 interface JobInputFormProps {
   jobId: string;
   /** 既存求人の流用時に渡す初期値。渡すとフォーム入力モードで開き、内容を反映する */
   initialData?: JobPostingInput;
+  /** 流用元の求人ID。渡すと流用元の確定原稿を参考原稿として生成に注入する */
+  reuseSourceJobId?: string;
 }
 
-export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
+export function JobInputForm({ jobId, initialData, reuseSourceJobId }: JobInputFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [inputMode, setInputMode] = useState<"ai" | "manual">(initialData ? "manual" : "ai");
@@ -64,8 +76,35 @@ export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
     airwork: initialData?.airwork || {},
     jobmedley: initialData?.jobmedley || {},
     hellowork: initialData?.hellowork || {},
+    selectedPlatforms:
+      initialData?.selectedPlatforms && initialData.selectedPlatforms.length > 0
+        ? initialData.selectedPlatforms
+        : [...ALL_PLATFORMS],
   });
+  const [activeTab, setActiveTab] = useState("common");
   const thumbnailRefInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedPlatforms = formData.selectedPlatforms ?? ALL_PLATFORMS;
+
+  const togglePlatform = (p: Platform) => {
+    setFormData((prev) => {
+      const current = prev.selectedPlatforms ?? [...ALL_PLATFORMS];
+      const next = current.includes(p)
+        ? current.filter((x) => x !== p)
+        : [...current, p];
+      return { ...prev, selectedPlatforms: next };
+    });
+    // 選択解除した媒体のタブを開いていたら共通情報タブに戻す
+    if (selectedPlatforms.includes(p) && activeTab === p) {
+      setActiveTab("common");
+    }
+  };
+
+  // AI解析（約25秒）中のアップロード・編集が漏れないよう、送信時は常に最新の formData を参照する
+  const formDataRef = useRef(formData);
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
 
   async function handleThumbnailReferenceUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -88,20 +127,37 @@ export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
 
   const handleAIParsed = (data: Partial<CommonJobInfo>) => {
     // AI解析結果をマージしてそのままTeam Aを起動
+    // formData を直接参照すると解析中にアップロードした参考画像等が stale closure で落ちるため ref 経由で読む
+    const latest = formDataRef.current;
+    if (!latest.selectedPlatforms || latest.selectedPlatforms.length === 0) {
+      toast.error("出力する媒体を1つ以上選択してください");
+      return;
+    }
     const merged: JobPostingInput = {
-      ...formData,
-      common: { ...formData.common, ...data },
+      ...latest,
+      common: { ...latest.common, ...data },
     };
-    sessionStorage.setItem("jobPostingInput", JSON.stringify(merged));
+    sessionStorage.setItem(
+      "jobPostingInput",
+      JSON.stringify({ ...merged, ...(reuseSourceJobId ? { reuseSourceJobId } : {}) })
+    );
     router.push(`/jobs/${jobId}/new-posting/progress`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const latest = formDataRef.current;
+    if (!latest.selectedPlatforms || latest.selectedPlatforms.length === 0) {
+      toast.error("出力する媒体を1つ以上選択してください");
+      return;
+    }
     setIsSubmitting(true);
 
     // フォームデータをsessionStorageに保存
-    sessionStorage.setItem("jobPostingInput", JSON.stringify(formData));
+    sessionStorage.setItem(
+      "jobPostingInput",
+      JSON.stringify({ ...latest, ...(reuseSourceJobId ? { reuseSourceJobId } : {}) })
+    );
 
     // 進捗ページへ遷移
     router.push(`/jobs/${jobId}/new-posting/progress`);
@@ -146,6 +202,63 @@ export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
           </div>
         </button>
       </div>
+
+      {/* 出力する媒体の選択（両モード共通） */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">出力する媒体</CardTitle>
+          <CardDescription>
+            求人原稿を作成する媒体を選択してください。選択した媒体のみ原稿を生成します。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {PLATFORM_OPTIONS.map((option) => {
+              const checked = selectedPlatforms.includes(option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => togglePlatform(option.value)}
+                  aria-pressed={checked}
+                  className={`flex items-center gap-2.5 p-3 rounded-lg border-2 transition-all text-left ${
+                    checked
+                      ? "border-blue-400 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`w-5 h-5 shrink-0 rounded flex items-center justify-center border ${
+                      checked
+                        ? "bg-blue-500 border-blue-500 text-white"
+                        : "border-gray-300 bg-white text-transparent"
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </span>
+                  <span>
+                    <span
+                      className={`block text-sm font-medium ${
+                        checked ? "text-blue-700" : "text-gray-700"
+                      }`}
+                    >
+                      {option.label}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {option.description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {selectedPlatforms.length === 0 && (
+            <p className="mt-3 text-xs text-red-500">
+              出力する媒体を1つ以上選択してください
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* サムネイル参考画像（両モード共通・任意） */}
       <Card>
@@ -213,68 +326,85 @@ export function JobInputForm({ jobId, initialData }: JobInputFormProps) {
             <CardHeader>
               <CardTitle>求人情報の入力</CardTitle>
               <CardDescription>
-                共通情報と各媒体向けの情報を入力してください。AIが自動で4媒体分の求人原稿を生成します。
+                共通情報と各媒体向けの情報を入力してください。AIが自動で選択した媒体分の求人原稿を生成します。
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="common">
-                <TabsList className="grid w-full grid-cols-5">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList
+                  className={`grid w-full ${
+                    ["grid-cols-1", "grid-cols-2", "grid-cols-3", "grid-cols-4", "grid-cols-5"][
+                      selectedPlatforms.length
+                    ]
+                  }`}
+                >
                   <TabsTrigger value="common">共通情報</TabsTrigger>
-                  <TabsTrigger value="indeed">Indeed</TabsTrigger>
-                  <TabsTrigger value="airwork">AirWork</TabsTrigger>
-                  <TabsTrigger value="jobmedley">JobMedley</TabsTrigger>
-                  <TabsTrigger value="hellowork">ハローワーク</TabsTrigger>
+                  {PLATFORM_OPTIONS.filter((o) => selectedPlatforms.includes(o.value)).map(
+                    (o) => (
+                      <TabsTrigger key={o.value} value={o.value}>
+                        {o.label}
+                      </TabsTrigger>
+                    )
+                  )}
                 </TabsList>
 
                 <TabsContent value="common" className="mt-6">
                   <CommonFields data={formData.common} onChange={updateCommon} />
                 </TabsContent>
 
-                <TabsContent value="indeed" className="mt-6">
-                  <IndeedFields
-                    data={formData.indeed || {}}
-                    onChange={(data) =>
-                      setFormData((prev) => ({ ...prev, indeed: { ...prev.indeed, ...data } }))
-                    }
-                  />
-                </TabsContent>
+                {selectedPlatforms.includes("indeed") && (
+                  <TabsContent value="indeed" className="mt-6">
+                    <IndeedFields
+                      data={formData.indeed || {}}
+                      onChange={(data) =>
+                        setFormData((prev) => ({ ...prev, indeed: { ...prev.indeed, ...data } }))
+                      }
+                    />
+                  </TabsContent>
+                )}
 
-                <TabsContent value="airwork" className="mt-6">
-                  <AirWorkFields
-                    data={formData.airwork || {}}
-                    onChange={(data) =>
-                      setFormData((prev) => ({ ...prev, airwork: { ...prev.airwork, ...data } }))
-                    }
-                  />
-                </TabsContent>
+                {selectedPlatforms.includes("airwork") && (
+                  <TabsContent value="airwork" className="mt-6">
+                    <AirWorkFields
+                      data={formData.airwork || {}}
+                      onChange={(data) =>
+                        setFormData((prev) => ({ ...prev, airwork: { ...prev.airwork, ...data } }))
+                      }
+                    />
+                  </TabsContent>
+                )}
 
-                <TabsContent value="jobmedley" className="mt-6">
-                  <JobMedleyFields
-                    data={formData.jobmedley || {}}
-                    onChange={(data) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        jobmedley: { ...prev.jobmedley, ...data },
-                      }))
-                    }
-                  />
-                </TabsContent>
+                {selectedPlatforms.includes("jobmedley") && (
+                  <TabsContent value="jobmedley" className="mt-6">
+                    <JobMedleyFields
+                      data={formData.jobmedley || {}}
+                      onChange={(data) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          jobmedley: { ...prev.jobmedley, ...data },
+                        }))
+                      }
+                    />
+                  </TabsContent>
+                )}
 
-                <TabsContent value="hellowork" className="mt-6">
-                  <HelloWorkFields
-                    data={formData.hellowork || {}}
-                    onChange={(data) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        hellowork: { ...prev.hellowork, ...data },
-                      }))
-                    }
-                  />
-                </TabsContent>
+                {selectedPlatforms.includes("hellowork") && (
+                  <TabsContent value="hellowork" className="mt-6">
+                    <HelloWorkFields
+                      data={formData.hellowork || {}}
+                      onChange={(data) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          hellowork: { ...prev.hellowork, ...data },
+                        }))
+                      }
+                    />
+                  </TabsContent>
+                )}
               </Tabs>
 
               <div className="mt-8 flex justify-end">
-                <Button type="submit" size="lg" disabled={isSubmitting}>
+                <Button type="submit" size="lg" disabled={isSubmitting || selectedPlatforms.length === 0}>
                   {isSubmitting ? "処理中..." : "AIで求人原稿を自動生成"}
                 </Button>
               </div>

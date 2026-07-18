@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth-guard";
+import { requireAuth } from "@/lib/auth-guard";
 import { extractKnowledge } from "@/lib/knowledge-extractor";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ export const maxDuration = 60;
  * PublishMetrics から成功パターンを抽出し SharedKnowledge に登録
  */
 export async function POST() {
-  const auth = await requireRole(["admin"]);
+  const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
   const result = await extractKnowledge();

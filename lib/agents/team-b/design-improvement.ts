@@ -1,4 +1,5 @@
 import { generatePlatformThumbnailsSingle, PlatformThumbnails } from "@/lib/nanobanana";
+import { selectCompositionRefsForJob } from "@/lib/reference-thumbnails";
 import { DesignImprovementInput, DesignImprovementOutput } from "./types";
 
 export async function runDesignImprovementAgent(
@@ -33,6 +34,15 @@ export async function runDesignImprovementAgent(
   }
 
   try {
+    // 参考サムネ（構図参考）: Indeed のみ、登録済み事例から AI が1枚を自動選定
+    const compositionRefs = platform === "indeed"
+      ? await selectCompositionRefsForJob({
+          jobTitle: improvedPosting.jobTitle || "求人募集",
+          industry,
+          catchphrase: improvedPosting.catchphrase || improvedPosting.appealTitle || "",
+        })
+      : undefined;
+
     const result = await generatePlatformThumbnailsSingle(
       {
         title: improvedPosting.jobTitle || "求人募集",
@@ -42,6 +52,7 @@ export async function runDesignImprovementAgent(
         colorScheme: "professional",
         style: "recruitment",
         visualStyle,
+        compositionRefs,
       },
       platform,
     );

@@ -55,55 +55,79 @@ export function ManuscriptOutput({ output, editable, jobId, onOutputChange }: Ma
     onOutputChange(updated);
   };
 
+  // 生成されている媒体のみタブ表示（媒体選択で生成をスキップした媒体は出さない）
+  const availablePlatforms = (
+    [
+      { value: "indeed", label: "インディード" },
+      { value: "airwork", label: "エアワーク" },
+      { value: "jobmedley", label: "ジョブメドレー" },
+      { value: "hellowork", label: "ハローワーク" },
+    ] as const
+  ).filter((t) => output[t.value]);
+
+  const gridColsClass =
+    ["grid-cols-1", "grid-cols-1", "grid-cols-2", "grid-cols-3", "grid-cols-4"][
+      availablePlatforms.length
+    ] ?? "grid-cols-4";
+
   return (
-    <Tabs defaultValue="indeed">
-      <TabsList className="grid w-full grid-cols-4">
-        <TabsTrigger value="indeed">インディード</TabsTrigger>
-        <TabsTrigger value="airwork">エアワーク</TabsTrigger>
-        <TabsTrigger value="jobmedley">ジョブメドレー</TabsTrigger>
-        <TabsTrigger value="hellowork">ハローワーク</TabsTrigger>
+    <Tabs defaultValue={availablePlatforms[0]?.value ?? "indeed"}>
+      <TabsList className={`grid w-full ${gridColsClass}`}>
+        {availablePlatforms.map((t) => (
+          <TabsTrigger key={t.value} value={t.value}>
+            {t.label}
+          </TabsTrigger>
+        ))}
       </TabsList>
 
-      <TabsContent value="indeed" className="mt-6">
-        <IndeedOutput
-          posting={output.indeed}
-          thumbnailUrls={output.indeed.thumbnailUrls}
-          editable={editable}
-          jobId={jobId}
-          onFieldChange={(field, value) => handleFieldChange("indeed", field, value)}
-          onThumbnailsChange={(urls) => handleThumbnailsChange("indeed", urls)}
-        />
-      </TabsContent>
+      {output.indeed && (
+        <TabsContent value="indeed" className="mt-6">
+          <IndeedOutput
+            posting={output.indeed}
+            thumbnailUrls={output.indeed.thumbnailUrls}
+            editable={editable}
+            jobId={jobId}
+            onFieldChange={(field, value) => handleFieldChange("indeed", field, value)}
+            onThumbnailsChange={(urls) => handleThumbnailsChange("indeed", urls)}
+          />
+        </TabsContent>
+      )}
 
-      <TabsContent value="airwork" className="mt-6">
-        <AirWorkOutput
-          posting={output.airwork}
-          thumbnailUrls={output.airwork.thumbnailUrls}
-          editable={editable}
-          jobId={jobId}
-          onFieldChange={(field, value) => handleFieldChange("airwork", field, value)}
-          onThumbnailsChange={(urls) => handleThumbnailsChange("airwork", urls)}
-        />
-      </TabsContent>
+      {output.airwork && (
+        <TabsContent value="airwork" className="mt-6">
+          <AirWorkOutput
+            posting={output.airwork}
+            thumbnailUrls={output.airwork.thumbnailUrls}
+            editable={editable}
+            jobId={jobId}
+            onFieldChange={(field, value) => handleFieldChange("airwork", field, value)}
+            onThumbnailsChange={(urls) => handleThumbnailsChange("airwork", urls)}
+          />
+        </TabsContent>
+      )}
 
-      <TabsContent value="jobmedley" className="mt-6">
-        <JobMedleyOutput
-          posting={output.jobmedley}
-          thumbnailUrls={output.jobmedley.thumbnailUrls}
-          editable={editable}
-          jobId={jobId}
-          onFieldChange={(field, value) => handleFieldChange("jobmedley", field, value)}
-          onThumbnailsChange={(urls) => handleThumbnailsChange("jobmedley", urls)}
-        />
-      </TabsContent>
+      {output.jobmedley && (
+        <TabsContent value="jobmedley" className="mt-6">
+          <JobMedleyOutput
+            posting={output.jobmedley}
+            thumbnailUrls={output.jobmedley.thumbnailUrls}
+            editable={editable}
+            jobId={jobId}
+            onFieldChange={(field, value) => handleFieldChange("jobmedley", field, value)}
+            onThumbnailsChange={(urls) => handleThumbnailsChange("jobmedley", urls)}
+          />
+        </TabsContent>
+      )}
 
-      <TabsContent value="hellowork" className="mt-6">
-        <HelloWorkOutput
-          posting={output.hellowork}
-          editable={editable}
-          onFieldChange={(field, value) => handleFieldChange("hellowork", field, value)}
-        />
-      </TabsContent>
+      {output.hellowork && (
+        <TabsContent value="hellowork" className="mt-6">
+          <HelloWorkOutput
+            posting={output.hellowork}
+            editable={editable}
+            onFieldChange={(field, value) => handleFieldChange("hellowork", field, value)}
+          />
+        </TabsContent>
+      )}
     </Tabs>
   );
 }

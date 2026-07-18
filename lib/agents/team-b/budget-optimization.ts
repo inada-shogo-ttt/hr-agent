@@ -17,6 +17,9 @@ export async function runBudgetOptimizationAgent(input: BudgetOptimizationInput)
 クリック率: ${metrics.ctr ?? "不明"}%
 クリック単価: ${metrics.cpc ?? "不明"}円
 合計利用予算: ${metrics.totalBudgetUsed ?? "不明"}円
+掲載期間: ${metrics.postingStartDate ?? "不明"} 〜 ${metrics.postingEndDate ?? "不明"}${metrics.postingDays ? `（${metrics.postingDays}日間）` : ""}
+日額費用（実績 = 合計費用÷掲載日数）: ${metrics.dailyCost ?? "不明"}円/日
+応募単価（CPA）: ${metrics.cpa ?? "不明"}円
 
 ## 求人情報
 職種: ${existingPosting.jobTitle || "不明"}
@@ -28,6 +31,8 @@ ${metricsSummary ? `\n## 数値分析サマリー（テキスト改善エージ�
 - CTRが低い場合: まず原稿改善を優先し、予算は維持or微増
 - CTRが高く応募率も高い場合: 予算増加で表示回数を増やす
 - CPCが高すぎる場合: 予算配分の見直しを推奨
+- 日額費用（実績）が日額予算を大きく下回る場合: 予算増額より先に表示・クリックの課題（原稿・キーワード）を疑う
+- 応募単価（CPA）が高い場合: 予算を増やす前に応募率（CVR）の改善を優先する
 
 以下のJSON形式のみで回答してください:
 {

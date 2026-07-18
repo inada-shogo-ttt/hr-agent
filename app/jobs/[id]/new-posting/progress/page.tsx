@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { AgentProgress } from "@/app/components/workflow/AgentProgress";
 import { WorkflowTimeline } from "@/app/components/workflow/WorkflowTimeline";
-import { OfficeScene, OfficeAgent } from "@/app/components/workflow/OfficeScene";
+import { LiveWritingDesk, DeskStep, FeedItem } from "@/app/components/workflow/LiveWritingDesk";
 import { SSEEvent, AgentId, AgentStatus } from "@/lib/agents/types";
 import { AllPlatformPostings } from "@/types/platform";
 import { AlertCircle, Clock } from "lucide-react";
@@ -24,16 +24,91 @@ const AGENT_WEIGHTS: Record<AgentId, number> = {
   "platform-formatter": 5,
 };
 
-const TEAM_A_AGENTS: OfficeAgent[] = [
-  { id: "manager", label: "マネージャー", color: "#3B82F6" },
-  { id: "trend-research", label: "トレンド調査", color: "#10B981" },
-  { id: "trend-analysis", label: "トレンド分析", color: "#14B8A6" },
-  { id: "reference-selection", label: "参考原稿選定", color: "#8B5CF6" },
-  { id: "manuscript-writing", label: "原稿執筆", color: "#6366F1" },
-  { id: "thumbnail-generation", label: "サムネイル生成", color: "#EC4899" },
-  { id: "fact-check", label: "ファクトチェック", color: "#F59E0B" },
-  { id: "platform-formatter", label: "フォーマッター", color: "#64748B" },
+const TEAM_A_STEPS: DeskStep[] = [
+  { id: "manager", label: "要件確認" },
+  { id: "trend-research", label: "調査" },
+  { id: "trend-analysis", label: "分析" },
+  { id: "reference-selection", label: "参考選定" },
+  { id: "manuscript-writing", label: "執筆" },
+  { id: "thumbnail-generation", label: "サムネ" },
+  { id: "fact-check", label: "検査" },
+  { id: "platform-formatter", label: "仕上げ" },
 ];
+
+const PLATFORM_FEED_LABELS: Record<string, string> = {
+  indeed: "Indeed原稿",
+  airwork: "AirWork原稿",
+  jobmedley: "JobMedley原稿",
+  hellowork: "ハローワーク原稿",
+};
+
+// SSEイベントからライブプレビューのフィードを組み立てる（すべて実データ）
+function buildTeamAFeed(events: SSEEvent[]): FeedItem[] {
+  const items: FeedItem[] = [];
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    const data = (event.data ?? {}) as Record<string, unknown>;
+    const id = `${event.agentId}-${event.type}-${i}`;
+
+    if (event.type === "agent_complete") {
+      switch (event.agentId) {
+        case "manager":
+          if (typeof data.summary === "string" && data.summary) {
+            items.push({ id, kind: "text", label: "要件分析", text: data.summary });
+          }
+          break;
+        case "trend-research":
+          if (typeof data.summary === "string" && data.summary) {
+            items.push({ id, kind: "text", label: "トレンド調査の発見", text: data.summary });
+          }
+          break;
+        case "trend-analysis":
+          if (Array.isArray(data.recommendedKeywords) && data.recommendedKeywords.length > 0) {
+            items.push({
+              id,
+              kind: "chips",
+              label: "採用キーワード",
+              chips: (data.recommendedKeywords as unknown[]).map(String),
+            });
+          }
+          break;
+        case "reference-selection":
+          items.push({
+            id,
+            kind: "text",
+            label: "参考原稿",
+            text: `効果実績のある参考原稿を${Number(data.referencesCount) || 0}件選定しました`,
+          });
+          break;
+        case "thumbnail-generation":
+          items.push({ id, kind: "text", label: "サムネイル", text: event.message });
+          break;
+        case "fact-check":
+          items.push({ id, kind: "text", label: "ファクトチェック", text: event.message });
+          break;
+      }
+    }
+
+    // 媒体別の原稿書き上がりプレビュー
+    if (
+      event.type === "agent_progress" &&
+      event.agentId === "manuscript-writing" &&
+      data.preview &&
+      typeof data.preview === "object"
+    ) {
+      const preview = data.preview as { title?: string; catchphrase?: string; excerpt?: string };
+      items.push({
+        id,
+        kind: "manuscript",
+        label: PLATFORM_FEED_LABELS[String(data.platform)] || "原稿",
+        title: preview.title || "",
+        catchphrase: preview.catchphrase,
+        excerpt: preview.excerpt || "",
+      });
+    }
+  }
+  return items;
+}
 
 export default function JobProgressPage() {
   const router = useRouter();
@@ -48,6 +123,9 @@ export default function JobProgressPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("AIエージェントを起動中...");
   const hasStarted = useRef(false);
+
+  // ライブプレビュー用フィード（SSEイベントの実データから導出）
+  const feed = useMemo(() => buildTeamAFeed(events), [events]);
 
   // 離脱防止: 実行中はページを離れる前に警告
   useEffect(() => {
@@ -75,7 +153,10 @@ export default function JobProgressPage() {
 
   const startWorkflow = (jobPostingInput: unknown) => {
     const worker = new Worker("/sse-worker.js");
-    worker.postMessage({ url: "/api/team-a", body: jobPostingInput });
+    worker.postMessage({
+      url: "/api/team-a",
+      body: { ...(jobPostingInput as Record<string, unknown>), jobId },
+    });
 
     worker.onmessage = async (e) => {
       const msg = e.data;
@@ -143,23 +224,14 @@ export default function JobProgressPage() {
       if (event.data) {
         const output = event.data as AllPlatformPostings;
 
-        const outputWithoutThumbnails: AllPlatformPostings = {
-          ...output,
-          thumbnailUrls: [],
-          platformThumbnails: undefined,
-          indeed: { ...output.indeed, thumbnailUrls: [] },
-          airwork: { ...output.airwork, thumbnailUrls: [] },
-          jobmedley: { ...output.jobmedley, thumbnailUrls: [] },
-        };
-
-        // サムネイルを Supabase Storage にアップロード
+        // サムネイルを Supabase Storage にアップロード（生成された媒体のみ）
         setStatusMessage("サムネイルをアップロード中...");
         const uploadedThumbnails: Record<string, string[]> = {};
         const platforms = ["indeed", "airwork", "jobmedley"] as const;
 
         for (const platform of platforms) {
           const platformOutput = output[platform];
-          if (platformOutput?.thumbnailUrls?.length > 0) {
+          if (platformOutput && (platformOutput.thumbnailUrls?.length ?? 0) > 0) {
             try {
               const uploadRes = await fetch("/api/thumbnails", {
                 method: "POST",
@@ -180,14 +252,20 @@ export default function JobProgressPage() {
           }
         }
 
-        // アップロード済みURLで出力を更新
+        // アップロード済みURLで出力を更新（生成された媒体のみ）
         const outputWithStorageUrls: AllPlatformPostings = {
           ...output,
           thumbnailUrls: Object.values(uploadedThumbnails).flat(),
           platformThumbnails: undefined,
-          indeed: { ...output.indeed, thumbnailUrls: uploadedThumbnails.indeed || [] },
-          airwork: { ...output.airwork, thumbnailUrls: uploadedThumbnails.airwork || [] },
-          jobmedley: { ...output.jobmedley, thumbnailUrls: uploadedThumbnails.jobmedley || [] },
+          ...(output.indeed
+            ? { indeed: { ...output.indeed, thumbnailUrls: uploadedThumbnails.indeed || [] } }
+            : {}),
+          ...(output.airwork
+            ? { airwork: { ...output.airwork, thumbnailUrls: uploadedThumbnails.airwork || [] } }
+            : {}),
+          ...(output.jobmedley
+            ? { jobmedley: { ...output.jobmedley, thumbnailUrls: uploadedThumbnails.jobmedley || [] } }
+            : {}),
         };
 
         sessionStorage.setItem("finalOutput", JSON.stringify(outputWithStorageUrls));
@@ -240,7 +318,7 @@ export default function JobProgressPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-2">AIエージェント実行中</h1>
         <p className="text-muted-foreground mb-4">
@@ -259,9 +337,14 @@ export default function JobProgressPage() {
           </div>
         )}
 
-        {/* オフィスシーン */}
+        {/* 原稿ライブプレビュー */}
         <div className="mb-6">
-          <OfficeScene agents={TEAM_A_AGENTS} statuses={agentStatuses} progress={progress} />
+          <LiveWritingDesk
+            steps={TEAM_A_STEPS}
+            statuses={agentStatuses}
+            feed={feed}
+            isComplete={isComplete}
+          />
         </div>
 
         <Card className="mb-6">
@@ -320,23 +403,23 @@ export default function JobProgressPage() {
           </Card>
         )}
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">エージェント実行状況</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <details className="mb-4 rounded-xl border bg-white">
+          <summary className="cursor-pointer select-none px-5 py-3 text-sm font-medium text-gray-600 hover:text-gray-900">
+            エージェント実行状況の詳細
+          </summary>
+          <div className="px-5 pb-5">
             <AgentProgress events={events} agentStatuses={agentStatuses} />
-          </CardContent>
-        </Card>
+          </div>
+        </details>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">イベントログ</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <details className="rounded-xl border bg-white">
+          <summary className="cursor-pointer select-none px-5 py-3 text-sm font-medium text-gray-600 hover:text-gray-900">
+            イベントログ
+          </summary>
+          <div className="px-5 pb-5">
             <WorkflowTimeline events={events} />
-          </CardContent>
-        </Card>
+          </div>
+        </details>
       </div>
     </main>
   );

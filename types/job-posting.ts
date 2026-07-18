@@ -308,4 +308,6 @@ export interface JobPostingInput {
   jobmedley?: JobMedleySpecificInfo;
   hellowork?: HelloWorkSpecificInfo;
   thumbnailReference?: string | null; // サムネイル参考画像 (data URL)。指定時は i2i 生成
+  // 出力する媒体。未指定・空の場合は全媒体を生成（後方互換）
+  selectedPlatforms?: ("indeed" | "airwork" | "jobmedley" | "hellowork")[];
 }

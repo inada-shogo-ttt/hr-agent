@@ -1,7 +1,8 @@
 import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
 import { TextImprovementInput, TextImprovementOutput } from "./types";
 import { extractJSON } from "@/lib/agents/utils";
-import { PLATFORM_FIELDS } from "@/app/references/fields";
+import { PLATFORM_FIELDS } from "@/lib/platform-fields";
+import { PLATFORM_GUIDELINE_DEFAULTS } from "@/lib/platform-guidelines/defaults";
 
 // 改善対象フィールド → 日本語ラベルを、参考原稿と同じ定義から引く
 function buildFieldLabels(platform: string): Record<string, string> {
@@ -60,6 +61,9 @@ export async function runTextImprovementAgent(input: TextImprovementInput): Prom
     sharedKnowledge,
     previousMetrics,
   } = input;
+
+  // 媒体別ガイドライン（システム設定）。未指定はコード内デフォルトで動く
+  const guideline = input.guideline ?? PLATFORM_GUIDELINE_DEFAULTS[platform];
 
   const fieldLabels = buildFieldLabels(platform);
 
@@ -130,6 +134,14 @@ ${benchmarks ? `\n### 業界ベンチマーク${benchmarks}` : ""}
     ? `\n## 全体の成功パターン（実績ベース・全アカウント共通）\n${sharedKnowledge}\n`
     : "";
 
+  // 媒体別ガイドライン（システム設定）を注入。改善時の前提知識・遵守事項として使う
+  const guidelineSection = `
+${guideline.algorithm}
+
+## 媒体の制約条件（改善後の原稿でも厳守すること。元の原稿に違反があれば修正する）
+${guideline.constraints}
+${guideline.format ? `\n## 媒体の求人フォーマット（該当フィールドはこの構成・記号・区切り線を維持したまま改善する）\n${guideline.format}\n` : ""}`;
+
   const prompt = `あなたは求人原稿の改善専門家です。以下のデータを総合的に分析し、**課題抽出 → リライト** まで一気通貫で実施してください。
 ${userReferencesSection}${crossJobMemorySection}${sharedKnowledgeSection}
 ## 媒体
@@ -137,7 +149,7 @@ ${platform}
 
 ## 既存原稿
 ${postingFields}
-${metricsSection}${historySection}
+${metricsSection}${historySection}${guidelineSection}
 ## 分析観点
 1. **タイトル・キャッチコピー**: 訴求力、差別化、ターゲット適合性
 2. **仕事内容**: 具体性、魅力の伝え方、読みやすさ

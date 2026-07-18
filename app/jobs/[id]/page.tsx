@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   RefreshCw, FileText, BarChart3, Clock,
   ChevronDown, ChevronUp, Copy, Check, ImageIcon,
-  CheckCircle, PenLine, ChevronRight, Plus, Trash2, Building2,
+  CheckCircle, PenLine, ChevronRight, Plus, Trash2, Building2, Coins,
 } from "lucide-react";
 import {
   Select,
@@ -195,6 +195,12 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
     improvements = ((outputFields as Record<string, unknown>).improvements as typeof improvements) || [];
   }
 
+  // この生成にかかった API 利用実費(円換算・概算)。導入後の実行分のみ記録されている
+  const apiCostYen =
+    outputFields && typeof outputFields.apiCostYen === "number"
+      ? (outputFields.apiCostYen as number)
+      : null;
+
   return (
     <div className={`rounded-lg border ${isTeamA ? "border-blue-200" : "border-orange-200"}`}>
       <button
@@ -230,6 +236,12 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
               <Badge variant="outline" className="text-xs gap-1">
                 <ImageIcon className="w-3 h-3" />
                 {thumbnailUrls.length}枚
+              </Badge>
+            )}
+            {apiCostYen !== null && (
+              <Badge variant="outline" className="text-xs gap-1 text-emerald-700 border-emerald-200">
+                <Coins className="w-3 h-3" />
+                API ¥{apiCostYen.toLocaleString("ja-JP")}
               </Badge>
             )}
           </div>
@@ -520,9 +532,11 @@ export default function JobDetailPage() {
         setTimeout(() => setManuscriptSaveStatus("idle"), 2000);
       } else {
         console.error("Manuscript save failed:", res.status);
+        toast.error("原稿の自動保存に失敗しました");
         setManuscriptSaveStatus("idle");
       }
     } catch {
+      toast.error("原稿の自動保存に失敗しました");
       setManuscriptSaveStatus("idle");
     }
   }
@@ -541,7 +555,7 @@ export default function JobDetailPage() {
 
   if (loading || !job) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+      <main className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
           読み込み中...
@@ -559,7 +573,7 @@ export default function JobDetailPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 求人ヘッダー */}
         <div className="mb-8">
@@ -587,7 +601,7 @@ export default function JobDetailPage() {
               </div>
               <p className="font-bold text-sm mb-1">新規作成</p>
               <p className="text-xs text-gray-500 leading-relaxed">
-                求人情報を入力して、AIがゼロから4媒体分の原稿を作成します
+                求人情報を入力して、AIがゼロから選択した媒体分の原稿を作成します
               </p>
               <div className="flex items-center gap-1 mt-3 text-xs font-medium text-blue-600">
                 はじめる

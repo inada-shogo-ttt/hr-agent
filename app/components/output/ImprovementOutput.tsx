@@ -4,58 +4,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImprovementDiff } from "./ImprovementDiff";
 import { IssuesSummary } from "./IssuesSummary";
 import { BudgetRecommendation } from "./BudgetRecommendation";
-import { ImprovedManuscript } from "./ImprovedManuscript";
-import { TeamBOutput, ExistingPostingFields } from "@/types/team-b";
+import { TeamBOutput } from "@/types/team-b";
 
 interface ImprovementOutputProps {
   output: TeamBOutput;
-  originalPosting: ExistingPostingFields;
-  editable?: boolean;
-  jobId?: string;
-  onOutputChange?: (output: TeamBOutput) => void;
 }
 
-export function ImprovementOutput({ output, originalPosting, editable, jobId, onOutputChange }: ImprovementOutputProps) {
+// 改善後の原稿全文は team-a レコードへ自動反映されるため、
+// ここでは差分・課題・予算提案のみを表示する(全文の確認・編集は求人詳細ページ)
+export function ImprovementOutput({ output }: ImprovementOutputProps) {
   const hasBudget = output.platform === "indeed" && !!output.budgetRecommendation;
-  const changedFields = new Set(Object.keys(output.improvedPosting));
-
-  const handleFieldChange = (field: string, value: string) => {
-    if (!onOutputChange) return;
-    const updated: TeamBOutput = {
-      ...output,
-      improvedPosting: {
-        ...output.improvedPosting,
-        [field]: value,
-      },
-    };
-    onOutputChange(updated);
-  };
 
   return (
-    <Tabs defaultValue="manuscript">
-      <TabsList className={`grid w-full ${hasBudget ? "grid-cols-4" : "grid-cols-3"}`}>
-        <TabsTrigger value="manuscript">改善後原稿</TabsTrigger>
+    <Tabs defaultValue="diff">
+      <TabsList className={`grid w-full ${hasBudget ? "grid-cols-3" : "grid-cols-2"}`}>
         <TabsTrigger value="diff">変更前/変更後</TabsTrigger>
         <TabsTrigger value="issues">課題サマリー</TabsTrigger>
         {hasBudget && <TabsTrigger value="budget">予算提案</TabsTrigger>}
       </TabsList>
-
-      <TabsContent value="manuscript" className="mt-6">
-        <ImprovedManuscript
-          platform={output.platform}
-          originalPosting={originalPosting}
-          improvedPosting={output.improvedPosting}
-          changedFields={changedFields}
-          thumbnailUrls={output.thumbnailUrls}
-          editable={editable}
-          jobId={jobId}
-          onFieldChange={handleFieldChange}
-          onThumbnailsChange={(urls) => {
-            if (!onOutputChange) return;
-            onOutputChange({ ...output, thumbnailUrls: urls });
-          }}
-        />
-      </TabsContent>
 
       <TabsContent value="diff" className="mt-6">
         <ImprovementDiff improvements={output.improvements} />

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const runtime = "nodejs";
 
 // POST /api/thumbnails — base64画像をSupabase Storageにアップロード
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   const { images, jobId, platform } = await request.json();
 
   if (!images?.length || !jobId || !platform) {

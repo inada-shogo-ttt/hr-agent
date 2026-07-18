@@ -37,6 +37,7 @@ export default function JobRewritePostingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
+  const [generateThumbnails, setGenerateThumbnails] = useState(true);
   const [posting, setPosting] = useState<ExistingPostingFields>({});
   const [indeedMetrics, setIndeedMetrics] = useState<IndeedMetrics>({});
   const [airworkMetrics, setAirworkMetrics] = useState<AirWorkMetrics>({});
@@ -93,32 +94,47 @@ export default function JobRewritePostingPage() {
         // 原稿フィールド: mergedOutput を優先、無ければ latestTeamAOutput（後方互換）
         const output = data.mergedOutput || data.latestTeamAOutput;
         if (output) {
-          // Indeed出力から既存原稿フィールドに変換
+          // 各媒体の出力から既存原稿フィールドに変換（媒体選択で生成された媒体のみ存在する）
           const indeed = output.indeed;
           const airwork = output.airwork;
           const jobmedley = output.jobmedley;
+          const hellowork = output.hellowork;
 
-          if (indeed) {
+          if (indeed || airwork || jobmedley || hellowork) {
             setPosting((prev) => ({
               ...prev,
-              companyName: indeed.companyName || "",
-              jobTitle: indeed.jobTitle || "",
-              catchphrase: indeed.catchphrase || "",
-              numberOfHires: indeed.numberOfHires || "",
-              location: indeed.location || "",
-              employmentType: indeed.employmentType || "",
-              salary: indeed.salary || "",
-              workingHours: indeed.workingHours || "",
-              socialInsurance: indeed.socialInsurance || "",
-              probationPeriod: indeed.probationPeriod || "",
-              jobDescription: indeed.jobDescription || "",
-              appealPoints: indeed.appealPoints || "",
-              requirements: indeed.requirements || "",
-              holidays: indeed.holidays || "",
-              access: indeed.access || "",
-              benefits: indeed.benefits || "",
-              recruitmentBudget: indeed.recruitmentBudget || "",
-              // AirWork fields
+              // Indeed fields
+              ...(indeed ? {
+                companyName: indeed.companyName || "",
+                jobTitle: indeed.jobTitle || "",
+                catchphrase: indeed.catchphrase || "",
+                numberOfHires: indeed.numberOfHires || "",
+                location: indeed.location || "",
+                employmentType: indeed.employmentType || "",
+                salary: indeed.salary || "",
+                workingHours: indeed.workingHours || "",
+                socialInsurance: indeed.socialInsurance || "",
+                probationPeriod: indeed.probationPeriod || "",
+                jobDescription: indeed.jobDescription || "",
+                appealPoints: indeed.appealPoints || "",
+                requirements: indeed.requirements || "",
+                holidays: indeed.holidays || "",
+                access: indeed.access || "",
+                benefits: indeed.benefits || "",
+                recruitmentBudget: indeed.recruitmentBudget || "",
+              } : {}),
+              // AirWork fields（共通項目は Indeed 未生成時のみ AirWork から補完）
+              ...(airwork && !indeed ? {
+                jobTitle: airwork.jobTitle || "",
+                jobDescription: airwork.jobDescription || "",
+                requirements: airwork.requirements || "",
+                salary: airwork.salary || "",
+                numberOfHires: airwork.numberOfHires || "",
+                location: airwork.location || "",
+                holidays: airwork.holidays || "",
+                socialInsurance: airwork.socialInsurance || "",
+                benefits: airwork.benefits || "",
+              } : {}),
               ...(airwork ? {
                 selectionProcess: airwork.selectionProcess || "",
               } : {}),
@@ -131,26 +147,26 @@ export default function JobRewritePostingPage() {
                 employmentTypeAndSalary: jobmedley.employmentTypeAndSalary || "",
               } : {}),
               // HelloWork fields
-              ...(output.hellowork ? {
-                companyAddress: output.hellowork.companyAddress || "",
-                workLocation: output.hellowork.workLocation || "",
-                employmentPeriod: output.hellowork.employmentPeriod || "",
-                contractRenewal: output.hellowork.contractRenewal || "",
-                wageType: output.hellowork.wageType || "",
-                wageAmount: output.hellowork.wageAmount || "",
-                allowances: output.hellowork.allowances || "",
-                commutingAllowance: output.hellowork.commutingAllowance || "",
-                bonus: output.hellowork.bonus || "",
-                raise: output.hellowork.raise || "",
-                overtime: output.hellowork.overtime || "",
-                annualLeave: output.hellowork.annualLeave || "",
-                insurance: output.hellowork.insurance || "",
-                pension: output.hellowork.pension || "",
-                trialPeriod: output.hellowork.trialPeriod || "",
-                requiredLicenses: output.hellowork.requiredLicenses || "",
-                selectionMethod: output.hellowork.selectionMethod || "",
-                applicationDocuments: output.hellowork.applicationDocuments || "",
-                remarks: output.hellowork.remarks || "",
+              ...(hellowork ? {
+                companyAddress: hellowork.companyAddress || "",
+                workLocation: hellowork.workLocation || "",
+                employmentPeriod: hellowork.employmentPeriod || "",
+                contractRenewal: hellowork.contractRenewal || "",
+                wageType: hellowork.wageType || "",
+                wageAmount: hellowork.wageAmount || "",
+                allowances: hellowork.allowances || "",
+                commutingAllowance: hellowork.commutingAllowance || "",
+                bonus: hellowork.bonus || "",
+                raise: hellowork.raise || "",
+                overtime: hellowork.overtime || "",
+                annualLeave: hellowork.annualLeave || "",
+                insurance: hellowork.insurance || "",
+                pension: hellowork.pension || "",
+                trialPeriod: hellowork.trialPeriod || "",
+                requiredLicenses: hellowork.requiredLicenses || "",
+                selectionMethod: hellowork.selectionMethod || "",
+                applicationDocuments: hellowork.applicationDocuments || "",
+                remarks: hellowork.remarks || "",
               } : {}),
             }));
             setLoadedFromHistory(true);
@@ -173,6 +189,7 @@ export default function JobRewritePostingPage() {
       platform,
       existingPosting: posting,
       metrics: platform === "indeed" ? indeedMetrics : platform === "airwork" ? airworkMetrics : undefined,
+      generateThumbnails,
     };
 
     // jobIdも一緒にsessionStorageに保存
@@ -184,7 +201,7 @@ export default function JobRewritePostingPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+      <main className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin" />
           前回の原稿データを読み込み中...
@@ -194,7 +211,7 @@ export default function JobRewritePostingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-2">求人ブラッシュアップ</h1>
         <p className="text-muted-foreground mb-4">
@@ -341,7 +358,17 @@ export default function JobRewritePostingPage() {
                 </TabsContent>
               </Tabs>
 
-              <div className="mt-8 flex justify-end">
+              <div className="mt-8 flex items-center justify-end gap-4">
+                {platform !== "hellowork" && (
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={generateThumbnails}
+                      onChange={(e) => setGenerateThumbnails(e.target.checked)}
+                    />
+                    サムネイルも再生成する
+                  </label>
+                )}
                 <Button type="submit" size="lg" disabled={isSubmitting}>
                   {isSubmitting ? "処理中..." : "AIで原稿を改善する"}
                 </Button>

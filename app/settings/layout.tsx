@@ -4,14 +4,34 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useUser } from "@/app/providers/auth-provider";
 import { Button } from "@/components/ui/button";
-import { Building2, Briefcase, Clock, Users } from "lucide-react";
+import { UserRole } from "@/types/auth";
+import {
+  BookOpen,
+  Building2,
+  Briefcase,
+  Clock,
+  CreditCard,
+  ImageIcon,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
 import { ReactNode, useEffect } from "react";
 
-const TABS = [
-  { href: "/settings/users", label: "ユーザー管理", icon: Users },
-  { href: "/settings/offices", label: "事業所マスタ", icon: Building2 },
-  { href: "/settings/job-types", label: "職種マスタ", icon: Briefcase },
-  { href: "/settings/employment-types", label: "勤務形態マスタ", icon: Clock },
+// タブごとの許可ロール。member は設定画面全体が非表示
+const TABS: {
+  href: string;
+  label: string;
+  icon: typeof Users;
+  roles: UserRole[];
+}[] = [
+  { href: "/settings/users", label: "組織管理", icon: Users, roles: ["super_admin", "admin"] },
+  { href: "/settings/reference-thumbnails", label: "参考サムネ", icon: ImageIcon, roles: ["super_admin"] },
+  { href: "/settings/platform-guidelines", label: "媒体設定", icon: SlidersHorizontal, roles: ["super_admin"] },
+  { href: "/settings/system-references", label: "参考原稿", icon: BookOpen, roles: ["super_admin"] },
+  { href: "/settings/offices", label: "事業所マスタ", icon: Building2, roles: ["super_admin", "admin"] },
+  { href: "/settings/job-types", label: "職種マスタ", icon: Briefcase, roles: ["super_admin", "admin"] },
+  { href: "/settings/employment-types", label: "勤務形態マスタ", icon: Clock, roles: ["super_admin", "admin"] },
+  { href: "/settings/billing", label: "プラン", icon: CreditCard, roles: ["super_admin", "admin"] },
 ];
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {
@@ -19,11 +39,27 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useUser();
   const router = useRouter();
 
+  const currentTab = TABS.find(
+    (tab) => pathname === tab.href || pathname.startsWith(tab.href + "/")
+  );
+  const isAllowed =
+    !!user && user.role !== "member" && (!currentTab || currentTab.roles.includes(user.role));
+
   useEffect(() => {
-    if (!loading && user?.role !== "admin") {
-      router.push("/jobs");
+    if (loading) return;
+    if (!user) {
+      router.push("/login");
+      return;
     }
-  }, [user, loading, router]);
+    // member は設定画面全体にアクセス不可
+    if (user.role === "member") {
+      router.push("/jobs");
+      return;
+    }
+    if (currentTab && !currentTab.roles.includes(user.role)) {
+      router.push("/settings/offices");
+    }
+  }, [user, loading, router, currentTab]);
 
   if (loading) {
     return (
@@ -33,7 +69,9 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (user?.role !== "admin") return null;
+  if (!user || !isAllowed) return null;
+
+  const visibleTabs = TABS.filter((tab) => tab.roles.includes(user.role));
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -44,8 +82,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         </p>
       </div>
       <div className="flex gap-2 mb-6 border-b pb-3 overflow-x-auto">
-        {TABS.map((tab) => {
-          const isActive = pathname === tab.href;
+        {visibleTabs.map((tab) => {
+          const isActive = pathname === tab.href || pathname.startsWith(tab.href + "/");
           const Icon = tab.icon;
           return (
             <Link key={tab.href} href={tab.href}>

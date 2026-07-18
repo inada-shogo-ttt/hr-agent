@@ -126,7 +126,7 @@ export default function OfficeDetailPage() {
 
   if (loading || !office) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+      <main className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
           読み込み中...
@@ -154,7 +154,7 @@ export default function OfficeDetailPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-6">

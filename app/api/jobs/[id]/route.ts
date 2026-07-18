@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth-guard";
+import { canReadOrg, getOwnedJob } from "@/lib/org-scope";
 
 // GET /api/jobs/[id] — 求人詳細 + 全履歴
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   const { id } = await params;
 
   const { data: job, error } = await supabase
@@ -19,7 +24,7 @@ export async function GET(
     .eq("id", id)
     .single();
 
-  if (error || !job) {
+  if (error || !job || !canReadOrg(auth.user, job.orgId)) {
     return NextResponse.json({ error: "求人が見つかりません" }, { status: 404 });
   }
 
@@ -43,7 +48,13 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
   const { id } = await params;
+
+  const owned = await getOwnedJob(id, auth.user, "write");
+  if ("error" in owned) return owned.error;
 
   const { error } = await supabase.from("Job").delete().eq("id", id);
 

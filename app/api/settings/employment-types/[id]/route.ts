@@ -8,7 +8,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(["admin"]);
+  const auth = await requireRole(["super_admin", "admin"]);
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
@@ -18,6 +18,7 @@ export async function PATCH(
     .from("EmploymentType")
     .update({ name: name.trim() })
     .eq("id", id)
+    .eq("orgId", auth.user.orgId)
     .select()
     .single();
 
@@ -35,12 +36,16 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(["admin"]);
+  const auth = await requireRole(["super_admin", "admin"]);
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
 
-  const { error } = await supabaseAdmin.from("EmploymentType").delete().eq("id", id);
+  const { error } = await supabaseAdmin
+    .from("EmploymentType")
+    .delete()
+    .eq("id", id)
+    .eq("orgId", auth.user.orgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ success: true });

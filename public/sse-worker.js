@@ -22,6 +22,7 @@ self.onmessage = async function (e) {
     const decoder = new TextDecoder();
     let buffer = "";
     let receivedComplete = false;
+    let receivedError = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -49,6 +50,7 @@ self.onmessage = async function (e) {
         try {
           const event = JSON.parse(jsonStr);
           if (event.type === "workflow_complete") receivedComplete = true;
+          if (event.type === "workflow_error") receivedError = true;
           self.postMessage({ type: "__worker_event", event: event });
         } catch (err) {
           console.error("[sse-worker] Failed to parse SSE event:", err);
@@ -56,11 +58,13 @@ self.onmessage = async function (e) {
       }
     }
 
-    // ストリーム終了後、完了イベントがなければタイムアウト扱い
-    if (!receivedComplete) {
-      self.postMessage({ type: "__worker_error", error: "TIMEOUT" });
-    } else {
+    // ストリーム終了後の判定:
+    // - workflow_error 受信済みなら実エラーが表示されているためタイムアウト扱いにしない
+    // - 完了もエラーも無いままストリームが切れた場合のみタイムアウト扱い
+    if (receivedComplete || receivedError) {
       self.postMessage({ type: "__worker_done" });
+    } else {
+      self.postMessage({ type: "__worker_error", error: "TIMEOUT" });
     }
   } catch (err) {
     self.postMessage({ type: "__worker_error", error: err.message || "Unknown error" });

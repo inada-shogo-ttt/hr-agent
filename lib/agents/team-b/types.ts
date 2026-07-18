@@ -4,6 +4,7 @@ import { ExistingPostingFields, IndeedMetrics, AirWorkMetrics, ImprovementDiff, 
 import { Platform } from "@/types/platform";
 import { PlatformThumbnails } from "@/lib/nanobanana";
 import { ReferencePostingData } from "@/types/reference";
+import { PlatformGuideline } from "@/types/platform-guideline";
 
 // Team B エージェント識別子
 // 旧: tb-manager / tb-metrics-analysis / tb-manuscript-analysis は tb-text-improvement に統合済み
@@ -31,6 +32,8 @@ export interface TextImprovementInput {
   historyContext?: unknown[];
   crossJobMemory?: string;
   sharedKnowledge?: string;
+  // 媒体別ガイドライン(システム設定)。未指定はコード内デフォルトで動く
+  guideline?: PlatformGuideline;
 }
 
 export interface TextImprovementOutput {

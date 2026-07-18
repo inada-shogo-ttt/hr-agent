@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth-guard";
+import { getOwnedJob } from "@/lib/org-scope";
 import { extractKnowledge } from "@/lib/knowledge-extractor";
 
 export const runtime = "nodejs";
@@ -13,6 +14,9 @@ export async function GET(
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
+
+  const owned = await getOwnedJob(id, auth.user, "read");
+  if ("error" in owned) return owned.error;
 
   const { data, error } = await supabaseAdmin
     .from("PublishMetrics")
@@ -35,6 +39,10 @@ export async function POST(
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
+
+  const owned = await getOwnedJob(id, auth.user, "write");
+  if ("error" in owned) return owned.error;
+
   const body = await request.json();
 
   const { data, error } = await supabaseAdmin

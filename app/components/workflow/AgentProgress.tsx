@@ -25,7 +25,7 @@ const AGENT_DESCRIPTIONS: Record<AgentId, string> = {
   "trend-research": "Web検索で最新の求人トレンド調査",
   "trend-analysis": "トレンドデータの分析・洞察抽出",
   "reference-selection": "効果的な参考原稿の選定",
-  "manuscript-writing": "4媒体分の求人原稿を執筆",
+  "manuscript-writing": "選択した媒体の求人原稿を執筆",
   "thumbnail-generation": "サムネイル画像の自動生成",
   "fact-check": "原稿と募集要項の整合性チェック",
   "platform-formatter": "各媒体フォーマットへの整形",

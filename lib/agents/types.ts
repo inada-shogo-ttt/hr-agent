@@ -4,6 +4,7 @@ import { JobPostingInput } from "@/types/job-posting";
 import { AllPlatformPostings } from "@/types/platform";
 import { PlatformThumbnails } from "@/lib/nanobanana";
 import { ReferencePostingData } from "@/types/reference";
+import { PlatformGuidelineMap } from "@/types/platform-guideline";
 
 // エージェントの状態
 export type AgentStatus = "pending" | "running" | "completed" | "error";
@@ -94,41 +95,22 @@ export interface TrendAnalysisOutput {
   targetAudienceInsights: string;
 }
 
-// Reference Selection Agent
-export interface ReferenceSelectionInput {
-  trendAnalysis: TrendAnalysisOutput;
-  jobPostingInput: JobPostingInput;
-  userReferences?: ReferencePostingData[];
-  sharedKnowledge?: string;
-}
-
-export interface ReferenceExample {
-  platform: string;
-  title: string;
-  catchphrase: string;
-  appealPoints: string;
-  structure: string;
-  whyEffective: string;
-}
-
-export interface ReferenceSelectionOutput {
-  selectedReferences: ReferenceExample[];
-  writingGuidelines: string;
-  toneAndStyle: string;
-}
-
 // Manuscript Writing Agent
+// ※ Reference Selection エージェントは廃止。参考原稿(SystemReferencePosting)と
+//   媒体設定(PlatformGuideline)を直接注入する
 export interface ManuscriptWritingInput {
   jobPostingInput: JobPostingInput;
   managerOutput: ManagerOutput;
   trendAnalysis: TrendAnalysisOutput;
-  referenceSelection: ReferenceSelectionOutput;
   userReferences?: ReferencePostingData[];
   sharedKnowledge?: string;
+  // 媒体別ガイドライン(システム設定)。未指定はコード内デフォルトで動く
+  guidelines?: PlatformGuidelineMap;
 }
 
+// 選択した媒体のみ生成されるため、各媒体は optional
 export interface ManuscriptWritingOutput {
-  indeed: {
+  indeed?: {
     jobTitle: string;
     catchphrase: string;
     jobDescription: string;
@@ -140,14 +122,14 @@ export interface ManuscriptWritingOutput {
     socialInsurance: string;
     probationPeriod?: string;
   };
-  airwork: {
+  airwork?: {
     jobTitle: string;
     catchphrase: string;
     jobDescription: string;
     requirements: string;
     selectionProcess: string;
   };
-  jobmedley: {
+  jobmedley?: {
     appealTitle: string;
     appealText: string;
     jobDescription: string;
@@ -159,7 +141,7 @@ export interface ManuscriptWritingOutput {
     access: string;
     selectionProcess: string;
   };
-  hellowork: {
+  hellowork?: {
     jobTitle: string;                   // 全角28字以内
     jobDescription: string;             // 全角360字以内
     // 2024年法改正対応（必須）
@@ -202,6 +184,8 @@ export interface ManuscriptWritingOutput {
 export interface ThumbnailGenerationInput {
   jobPostingInput: JobPostingInput;
   manuscript: ManuscriptWritingOutput;
+  // サムネイル生成対象媒体（indeed / airwork / jobmedley のみ有効）。未指定は3媒体全て
+  platforms?: ("indeed" | "airwork" | "jobmedley")[];
 }
 
 export interface VisualStyle {
@@ -222,6 +206,8 @@ export interface ThumbnailGenerationOutput {
 export interface FactCheckInput {
   jobPostingInput: JobPostingInput;
   manuscript: ManuscriptWritingOutput;
+  // 媒体別ガイドライン(システム設定)。制約条件を検証条件として使う
+  guidelines?: PlatformGuidelineMap;
 }
 
 export interface FactCheckIssue {
@@ -244,7 +230,6 @@ export interface WorkflowResult {
   managerOutput: ManagerOutput;
   trendResearch: TrendResearchOutput;
   trendAnalysis: TrendAnalysisOutput;
-  referenceSelection: ReferenceSelectionOutput;
   manuscriptWriting: ManuscriptWritingOutput;
   thumbnailGeneration: ThumbnailGenerationOutput;
   factCheck: FactCheckOutput;

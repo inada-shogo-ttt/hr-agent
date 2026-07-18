@@ -230,12 +230,12 @@ export interface HelloWorkPosting {
 // プラットフォーム識別子
 export type Platform = "indeed" | "airwork" | "jobmedley" | "hellowork";
 
-// 全媒体の出力型
+// 全媒体の出力型（選択した媒体のみ生成されるため、各媒体は optional）
 export interface AllPlatformPostings {
-  indeed: IndeedPosting;
-  airwork: AirWorkPosting;
-  jobmedley: JobMedleyPosting;
-  hellowork: HelloWorkPosting;
+  indeed?: IndeedPosting;
+  airwork?: AirWorkPosting;
+  jobmedley?: JobMedleyPosting;
+  hellowork?: HelloWorkPosting;
   thumbnailUrls: string[];           // deprecated, 後方互換用
   platformThumbnails?: PlatformThumbnails; // 媒体別サムネイル
   visualStyle?: {                    // Team B で引き継ぐビジュアルスタイル
@@ -243,5 +243,7 @@ export interface AllPlatformPostings {
     colorPalette?: string;
     sceneDescription?: string;
   };
+  // この生成にかかった API 利用実費(円換算・概算)。lib/api-cost.ts で集計
+  apiCostYen?: number;
   generatedAt: string;
 }
