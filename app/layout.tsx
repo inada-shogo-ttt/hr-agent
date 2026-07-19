@@ -24,8 +24,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "採用エージェント — 伝わる求人は、つくれる。",
-  description: "求人原稿の作成から媒体別最適化、掲載後の改善まで。採用業務をひとつの流れで進めるAIパートナーです。",
+  title: "採用エージェント — 媒体別の求人原稿をAIで作成・改善",
+  description: "テキストや求人票から、Indeed・AirWork・JobMedley・ハローワーク向けの原稿とサムネイルを生成。掲載結果をもとにした改善まで支援します。",
 };
 
 export default function RootLayout({

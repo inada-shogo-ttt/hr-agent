@@ -1,325 +1,201 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
-  ArrowDownRight,
   ArrowRight,
-  BadgeCheck,
   BarChart3,
   Check,
-  FileText,
-  Layers3,
+  Clock3,
+  FilePenLine,
+  Gauge,
+  ImageIcon,
+  LineChart,
+  Megaphone,
+  Menu,
   PenLine,
-  SearchCheck,
+  Settings2,
   Sparkles,
-  TrendingUp,
+  WandSparkles,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ProductPreview } from "@/app/components/home/ProductPreview";
 import { Reveal } from "@/app/components/home/Reveal";
 
 const START_HREF = "/login?next=/jobs";
 
-const platforms = [
-  { name: "Indeed", sub: "インディード", color: "bg-[#2557a7]" },
-  { name: "AirWork", sub: "エアワーク", color: "bg-[#fc642d]" },
-  { name: "JobMedley", sub: "ジョブメドレー", color: "bg-[#008489]" },
-  { name: "HelloWork", sub: "ハローワーク", color: "bg-[#d93a5f]" },
-];
+const media = ["Indeed", "AirWork", "JobMedley", "ハローワーク"];
+
+function BrandMark({ inverse = false }: { inverse?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-2.5 font-bold tracking-tight">
+      <span className="relative block h-8 w-7" aria-hidden>
+        <i className="absolute left-[9px] top-0 h-2.5 w-2.5 rotate-45 rounded-[2px] bg-primary" />
+        <i className="absolute bottom-[3px] left-[2px] h-3.5 w-3.5 rotate-45 rounded-[3px] bg-primary/75" />
+        <i className="absolute bottom-[3px] right-0 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-primary" />
+      </span>
+      <span className={inverse ? "text-white" : "text-[#20252b]"}>採用エージェント</span>
+    </span>
+  );
+}
+
+function PinkButton({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <Link href={START_HREF} className={`group inline-flex h-12 items-center justify-center gap-4 rounded-full bg-primary px-7 text-[14px] font-bold text-white shadow-[0_9px_24px_rgba(255,56,92,.22)] transition hover:-translate-y-0.5 hover:bg-[#e9214a] ${className}`}>
+      {children}<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+    </Link>
+  );
+}
+
+function OfficeScene() {
+  return (
+    <div className="relative h-[138px] overflow-hidden rounded-lg bg-[#f2f2f2]">
+      <Image
+        src="/images/landing/team-meeting.png"
+        alt="明るいオフィスで求人内容を検討する採用チーム"
+        fill
+        sizes="190px"
+        className="object-cover"
+      />
+    </div>
+  );
+}
+
+function HeroDemo() {
+  const fields = ["Webマーケティング（正社員）", "東京都渋谷区", "正社員", "450万円〜600万円"];
+  return (
+    <div className="relative rounded-[18px] border border-[#e7e1df] bg-white shadow-[0_20px_55px_rgba(56,30,33,.15)]">
+      <div className="flex h-14 items-center gap-3 border-b border-[#eee9e8] px-5">
+        <BrandMark />
+        <span className="ml-4 text-sm font-bold">新しい求人を作成</span>
+      </div>
+      <div className="grid min-h-[380px] grid-cols-[125px_1fr] sm:grid-cols-[150px_1fr]">
+        <aside className="border-r border-[#eee9e8] px-3 py-5 text-[12px] text-gray-500 sm:px-4">
+          {[
+            [Gauge, "求人管理"], [Menu, "事業所・求人一覧"], [FilePenLine, "新規原稿作成"], [LineChart, "ブラッシュアップ"], [ImageIcon, "参考画像"], [Settings2, "設定"],
+          ].map(([Icon, label], i) => {
+            const I = Icon as typeof Gauge;
+            return <div key={label as string} className={`mb-2 flex items-center gap-2 rounded-md px-2 py-2 ${i === 2 ? "bg-[#fff0f3] font-bold text-primary" : ""}`}><I className="h-3.5 w-3.5" />{label as string}</div>;
+          })}
+        </aside>
+        <div className="min-w-0 p-4 sm:p-5">
+          <div className="mb-5 flex items-center justify-between text-[11px] font-bold text-gray-400">
+            {["基本情報", "求人内容", "媒体選択", "確認・保存"].map((step, i) => <span key={step} className={`flex items-center gap-1 ${i === 0 ? "text-primary" : ""}`}><b className={`inline-grid h-4 w-4 place-items-center rounded-full border ${i === 0 ? "border-primary" : "border-gray-300"}`}>{i + 1}</b><em className="hidden not-italic sm:inline">{step}</em></span>)}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[1fr_190px]">
+            <div>
+              <p className="mb-2 text-[13px] font-bold">職種</p>
+              {fields.map((field, i) => <div key={field} className="mb-2 rounded-md border border-[#e8e4e2] px-3 py-2 text-[12px] text-gray-600"><span className="block text-[10px] text-gray-400">{["職種名", "勤務地", "雇用形態", "給与"][i]}</span>{field}</div>)}
+              <div className="mt-3 rounded-lg border border-[#ffd5dd] bg-[#fff8f9] p-3">
+                <p className="text-[12px] font-bold">AIアシストで魅力的な原稿を作成</p>
+                <p className="mt-1 text-[10px] leading-4 text-gray-500">入力内容から応募につながる原稿を自動生成します。</p>
+                <button className="mt-2 rounded bg-primary px-3 py-1.5 text-[11px] font-bold text-white">AIで原稿を生成する</button>
+              </div>
+            </div>
+            <div className="rounded-lg border border-[#ebe5e3] bg-[#fffdfd] p-3">
+              <p className="mb-2 text-[11px] font-bold">プレビュー（例）</p>
+              <OfficeScene />
+              <p className="mt-3 text-[13px] font-bold leading-5">媒体の項目に合わせた求人原稿を生成</p>
+              <div className="mt-2 space-y-1 text-[10px] text-gray-600">{["入力情報から訴求ポイントを整理", "媒体ごとの形式・文字数に対応", "原稿とサムネイルをまとめて確認"].map(x => <p key={x} className="flex gap-1"><Check className="h-3 w-3 text-[#25ba83]" />{x}</p>)}</div>
+              <button className="mt-3 w-full rounded-full bg-primary py-2 text-[11px] font-bold text-white">生成結果を確認する</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MediaLogos({ compact = false }: { compact?: boolean }) {
+  return <div className={`grid ${compact ? "grid-cols-2 gap-2" : "grid-cols-2 gap-3 sm:grid-cols-4"}`}>{media.map((item, i) => <div key={item} className={`grid place-items-center rounded-lg border border-[#ece8e6] bg-white font-bold shadow-[0_2px_6px_rgba(34,20,22,.025)] ${compact ? "h-12 px-2 text-[11px]" : "h-[76px] px-3 text-[14px]"} ${[0,3].includes(i) ? "text-[#1860a8]" : "text-[#ef3153]"}`}>{item}</div>)}</div>;
+}
+
+function MiniEditor() {
+  return (
+    <div className="relative rounded-xl border border-[#e9e3e1] bg-white p-4 shadow-[0_12px_30px_rgba(70,42,45,.1)] sm:p-6">
+      <div className="mb-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[#eee9e7] pb-3 text-[11px] font-bold"><span>求人を作成</span>{[1,2,3,4].map((n) => <span key={n} className={n === 1 ? "text-primary" : "text-gray-400"}>◯ {n === 1 ? "基本情報" : n === 2 ? "求人内容" : n === 3 ? "媒体選択" : "確認"}</span>)}</div>
+      <div className="grid grid-cols-[90px_1fr] gap-4">
+        <div className="space-y-2">{[1,2,3,4].map(n => <div key={n} className={`h-8 rounded border ${n === 2 ? "border-[#ffc4cf] bg-[#fff6f8]" : "border-[#eee] bg-[#fafafa]"}`} />)}</div>
+        <div><div className="mb-3 h-9 rounded border border-[#e9e5e3]" /><div className="h-20 rounded border border-[#e9e5e3] bg-[#fdfcfc] p-3"><div className="h-2 w-4/5 rounded bg-gray-100" /><div className="mt-2 h-2 w-3/5 rounded bg-gray-100" /></div></div>
+      </div>
+      <div className="absolute -right-2 -top-2 grid h-9 w-9 place-items-center rounded-full border border-[#b7dcf4] bg-white text-[#4aa3dd] shadow"><Sparkles className="h-4 w-4" /></div>
+    </div>
+  );
+}
+
+function Portrait({ index }: { index: number }) {
+  return (
+    <div className="relative min-h-[220px] w-[40%] shrink-0 overflow-hidden rounded-l-xl bg-gray-100">
+      <Image
+        src={`/images/landing/customer-0${index + 1}.png`}
+        alt="採用エージェントの活用イメージ"
+        fill
+        sizes="(max-width: 1024px) 40vw, 160px"
+        className="object-cover object-top"
+      />
+    </div>
+  );
+}
 
 export default function Home() {
+  const pains = [
+    [Clock3, "同じ求人情報を何度も入力している", "共通の求人情報を一度入力し、選択した媒体向けの原稿をまとめて作成します。"],
+    [PenLine, "媒体ごとの書き分けが難しい", "媒体固有の項目や文字数を踏まえ、訴求ポイントを原稿へ落とし込みます。"],
+    [ImageIcon, "求人に合う画像も用意したい", "求人情報や参考画像をもとに、媒体別のサムネイルを生成します。"],
+    [BarChart3, "掲載後の改善方法が分からない", "掲載数値と過去原稿を参照し、課題・改善差分・次の施策を提示します。"],
+  ] as const;
+  const features = [
+    [Megaphone, "求人トレンドを調査", "職種・業種・地域の傾向を調べ、原稿の訴求設計に活用します。"],
+    [FilePenLine, "4媒体向けに原稿作成", "媒体ごとの項目・表現・文字数に合わせて、求人原稿を書き分けます。"],
+    [ImageIcon, "サムネイルも同時生成", "求人内容と参考画像をもとに、媒体別のビジュアルを作成します。"],
+    [BarChart3, "掲載結果から改善", "表示・クリック・応募などの数値と原稿を分析し、改善差分を提示します。"],
+  ] as const;
   return (
-    <main className="min-h-screen overflow-x-clip bg-[#fffdfb] text-gray-900">
-      <header className="relative z-20 mx-auto flex h-20 max-w-[1180px] items-center justify-between px-6 lg:px-8">
-        <Link href="/" className="group flex items-center gap-2.5" aria-label="採用エージェント ホーム">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-[11px] bg-gray-900 text-sm font-bold text-white shadow-sm transition-transform group-hover:-rotate-3">
-            採
-          </span>
-          <span className="text-[15px] font-bold tracking-tight">採用エージェント</span>
-        </Link>
-
-        <nav className="hidden items-center gap-7 text-[13px] font-medium text-gray-600 md:flex" aria-label="メインナビゲーション">
-          <a href="#value" className="transition-colors hover:text-gray-950">できること</a>
-          <a href="#outputs" className="transition-colors hover:text-gray-950">出力サンプル</a>
-          <a href="#platforms" className="transition-colors hover:text-gray-950">対応媒体</a>
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <Link href="/login" className="hidden text-[13px] font-semibold text-gray-700 transition-colors hover:text-primary sm:block">
-            ログイン
-          </Link>
-          <Link href={START_HREF}>
-            <Button size="sm" className="h-10 rounded-full px-4 text-[13px] font-bold shadow-sm hover:-translate-y-0.5 sm:px-5">
-              <span className="hidden sm:inline">求人原稿を作成する</span>
-              <span className="sm:hidden">はじめる</span>
-              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-            </Button>
-          </Link>
-        </div>
+    <main className="overflow-x-clip bg-white text-[#252a30]">
+      <header className="mx-auto flex h-[72px] max-w-[1200px] items-center justify-between px-5 lg:px-8">
+        <Link href="/" className="text-[15px]"><BrandMark /></Link>
+        <nav className="hidden items-center gap-9 text-[14px] font-bold lg:flex"><a href="#product">できること</a><a href="#flow">作成の流れ</a><a href="#features">機能</a><a href="#media">対応媒体</a><a href="#use-cases">活用例</a></nav>
+        <div className="flex items-center gap-5"><Link href="/login" className="hidden text-[14px] font-bold sm:block">ログイン</Link><PinkButton className="h-10 px-5 text-[13px]">求人原稿を作成する</PinkButton></div>
       </header>
 
-      <section className="relative">
-        <div className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[660px] overflow-hidden" aria-hidden>
-          <div className="absolute left-1/2 top-[-330px] h-[670px] w-[1000px] -translate-x-1/2 rounded-full bg-[#ffe4e8] blur-3xl" />
-          <div className="absolute right-[-130px] top-[170px] h-[280px] w-[280px] rounded-full bg-[#f7efff] blur-3xl" />
-          <div className="absolute left-[-80px] top-[350px] h-[220px] w-[220px] rounded-full bg-[#fff0d9] blur-3xl" />
-          <div className="absolute inset-x-0 top-0 h-[510px] bg-[radial-gradient(rgba(34,34,34,0.09)_1px,transparent_1px)] [background-size:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-        </div>
-
-        <div className="relative z-10 mx-auto grid max-w-[1180px] items-center gap-12 px-6 pb-20 pt-14 lg:grid-cols-[minmax(0,0.95fr)_minmax(500px,1.05fr)] lg:px-8 lg:pb-28 lg:pt-24">
-          <div>
-            <div className="lp-fade-up inline-flex items-center gap-2 rounded-full border border-[#f1c9cf] bg-white/80 px-3.5 py-1.5 text-[11px] font-bold tracking-[0.08em] text-[#b8334d] shadow-sm backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5" />
-              RECRUITING COPY, REIMAGINED
-            </div>
-            <h1 className="lp-fade-up mt-6 font-serif text-[3.2rem] font-black leading-[1.02] tracking-[-0.075em] text-gray-950 sm:text-[4.25rem]" style={{ animationDelay: "90ms" }}>
-              「伝わる求人」は、
-              <br />
-              つくれる。
-            </h1>
-            <p className="lp-fade-up mt-7 max-w-[490px] text-[15px] leading-8 text-gray-600 sm:text-[16px]" style={{ animationDelay: "180ms" }}>
-              事業所と職種を入力するだけ。求人原稿の作成から媒体ごとの最適化、掲載後の改善まで、採用業務をひとつの流れで進められます。
-            </p>
-            <div className="lp-fade-up mt-8 flex flex-wrap gap-3" style={{ animationDelay: "260ms" }}>
-              <Link href={START_HREF}>
-                <Button size="lg" className="h-13 rounded-full px-7 text-[15px] font-bold shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg">
-                  求人原稿を作成する
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <a href="#outputs">
-                <Button variant="outline" size="lg" className="h-13 rounded-full border-gray-300 bg-white/80 px-6 text-[15px] font-bold hover:border-gray-900 hover:bg-white">
-                  出力サンプルを見る
-                  <ArrowDownRight className="ml-2 h-4 w-4" />
-                </Button>
-              </a>
-            </div>
-            <div className="lp-fade-up mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[12px] text-gray-500" style={{ animationDelay: "340ms" }}>
-              {[
-                "原稿・サムネイルをまとめて作成",
-                "主要4媒体に合わせて出力",
-              ].map((item) => (
-                <span key={item} className="inline-flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#008489]" strokeWidth={3} />
-                  {item}
-                </span>
-              ))}
-            </div>
+      <section className="relative overflow-hidden bg-[radial-gradient(circle_at_18%_72%,#fff3f1_0,transparent_30%),radial-gradient(circle_at_90%_38%,#fff0f4_0,transparent_28%)]">
+        <div className="relative z-10 mx-auto grid max-w-[1200px] items-center gap-10 px-5 pb-24 pt-14 lg:grid-cols-[.78fr_1.22fr] lg:px-8 lg:pb-20 lg:pt-20">
+          <div className="lp-fade-up">
+            <p className="text-[17px] font-bold tracking-[.13em] text-primary">入力から改善まで、ひとつの流れで。</p>
+            <h1 className="mt-6 text-[42px] font-black leading-[1.35] tracking-[-.05em] sm:text-[52px]">媒体ごとの求人原稿を、<br />AIで<span className="text-primary">まとめて作成。</span></h1>
+            <p className="mt-6 max-w-[520px] text-[15px] font-medium leading-8 text-gray-600">テキスト・求人票・参考URLから求人情報を整理し、Indeed、AirWork、JobMedley、ハローワーク向けの原稿とサムネイルを生成。掲載後は数値と履歴をもとに、次の原稿を改善できます。</p>
+            <div className="mt-7 flex flex-wrap gap-3"><PinkButton>求人原稿を作成する</PinkButton><a href="#product" className="inline-flex h-12 items-center gap-3 rounded-full border border-[#bbb] bg-white px-6 text-[14px] font-bold">できることを見る <ArrowRight className="h-4 w-4" /></a></div>
+            <div className="mt-9 grid max-w-[500px] grid-cols-3 gap-2 text-center">{[["4媒体", "媒体別原稿", "に対応"], ["AI入力", "テキスト・画像・PDF・URL", "を解析"], ["履歴活用", "掲載結果と過去原稿", "から改善"]].map(([num,label,unit]) => <div key={label}><p className="text-[11px] text-gray-500">{label}</p><p className="mt-1 text-[22px] font-black text-primary">{num}</p><small className="text-[11px] text-gray-500">{unit}</small></div>)}</div>
           </div>
+          <div className="lp-fade-up min-w-0" style={{ animationDelay: "120ms" }}><HeroDemo /></div>
+        </div>
+        <div className="absolute -bottom-5 right-0 h-20 w-[42%] -skew-y-6 bg-primary/35" /><div className="absolute -bottom-10 right-0 h-20 w-[31%] -skew-y-3 bg-primary/60" />
+      </section>
 
-          <div className="lp-fade-up relative lg:pl-4" style={{ animationDelay: "180ms" }}>
-            <div className="absolute -left-2 top-[12%] hidden rounded-full border border-[#eadfd5] bg-white px-3 py-2 text-[11px] font-bold text-gray-600 shadow-md xl:block">
-              <BadgeCheck className="mr-1.5 inline h-3.5 w-3.5 text-[#008489]" />
-              ファクトチェック
-            </div>
-            <div className="absolute -right-7 bottom-[16%] hidden rounded-full border border-[#eadfd5] bg-white px-3 py-2 text-[11px] font-bold text-gray-600 shadow-md xl:block">
-              <Layers3 className="mr-1.5 inline h-3.5 w-3.5 text-primary" />
-              4媒体へ出力
-            </div>
-            <ProductPreview />
-          </div>
+      <section className="border-b border-[#eee9e7] bg-white py-10">
+        <div className="mx-auto max-w-[1120px] px-5"><h2 className="text-center text-[20px] font-bold">求人原稿の作成と改善を、ひとつの場所で</h2><div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{pains.map(([Icon,title,body]) => <article key={title} className="rounded-xl border border-[#e8e3e1] bg-white px-5 py-6 text-center shadow-[0_4px_12px_rgba(50,29,32,.045)]"><Icon className="mx-auto h-8 w-8 text-primary" strokeWidth={1.7}/><h3 className="mt-4 text-[14px] font-bold">{title}</h3><p className="mt-2 text-[12px] leading-6 text-gray-500">{body}</p></article>)}</div></div>
+      </section>
+
+      <section id="product" className="scroll-mt-8 py-16 sm:py-20">
+        <div className="mx-auto grid max-w-[1240px] items-center gap-7 px-5 lg:grid-cols-[.72fr_.58fr_1.4fr_.62fr]">
+          <Reveal><div><p className="text-[12px] font-bold tracking-[.15em] text-primary">PRODUCT</p><h2 className="mt-4 text-[30px] font-black leading-[1.5]">一度の入力から、<br />4媒体向けの原稿へ。</h2><p className="mt-4 text-[14px] leading-7 text-gray-600">共通の求人情報をもとに、選択した媒体の入力項目や表現ルールに合わせて原稿を生成します。必要な媒体だけを選んで作成できます。</p><a href="#flow" className="mt-6 inline-flex items-center gap-4 rounded-full border border-gray-300 px-5 py-3 text-[13px] font-bold">作成の流れを見る <ArrowRight className="h-4 w-4" /></a></div></Reveal>
+          <Reveal delay={60}><div className="grid gap-3">{["AIかんたん入力", "参考情報を活用", "媒体別サムネイル"].map((x, i) => <div key={x} className="rounded-lg border border-[#ffbdca] bg-[#fffafa] p-4 text-[12px]"><b>{x}</b><p className="mt-1 text-[11px] leading-5 text-gray-500">{i === 0 ? "テキスト・画像・PDF・URLを解析" : i === 1 ? "既存原稿やシステム参考原稿を参照" : "求人内容と参考画像から生成"}</p></div>)}</div></Reveal>
+          <Reveal delay={100}><MiniEditor /></Reveal>
+          <Reveal delay={140}><div><p className="mb-3 rounded-lg border border-[#ffbdca] bg-[#fffafa] p-3 text-center text-[12px] font-bold text-primary">選択した媒体の原稿を生成</p><MediaLogos compact /></div></Reveal>
         </div>
       </section>
 
-      <section id="value" className="scroll-mt-12 border-y border-[#e8e4df] bg-white">
-        <div className="mx-auto grid max-w-[1180px] divide-y divide-[#e8e4df] px-6 md:grid-cols-3 md:divide-x md:divide-y-0 lg:px-8">
-          {[
-            { number: "01", title: "必要な情報だけ入力", body: "事業所・職種・雇用条件を登録。すでにある求人票も、作成の材料として活用できます。", icon: PenLine },
-            { number: "02", title: "媒体ごとに整えて出力", body: "各媒体の形式や文字数に合わせて、同じ求人情報から原稿をつくり分けます。", icon: FileText },
-            { number: "03", title: "掲載後も、次の一手へ", body: "掲載数値と過去の履歴を踏まえ、改善のポイントと変更案を確認できます。", icon: TrendingUp },
-          ].map((item) => (
-            <article key={item.number} className="group px-0 py-8 md:px-8 md:py-10 first:md:pl-0 last:md:pr-0">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px] font-bold tracking-[0.18em] text-primary">{item.number}</span>
-                <item.icon className="h-5 w-5 text-gray-300 transition-colors group-hover:text-primary" />
-              </div>
-              <h2 className="mt-5 text-[17px] font-bold tracking-tight">{item.title}</h2>
-              <p className="mt-2.5 text-[13px] leading-6 text-gray-500">{item.body}</p>
-            </article>
-          ))}
-        </div>
+      <section id="flow" className="scroll-mt-8 border-y border-[#eee9e7] bg-[#fffdfc] py-8">
+        <div className="mx-auto grid max-w-[1160px] gap-8 px-5 lg:grid-cols-[230px_1fr]"><div className="self-center"><p className="text-[11px] font-bold tracking-[.12em] text-primary">HOW IT WORKS</p><h2 className="mt-3 text-[25px] font-black leading-9">求人作成から改善まで<br />3つのステップ</h2></div><div className="grid gap-5 sm:grid-cols-3">{[[WandSparkles,"求人情報を登録","テキスト、求人票、参考URLを入力。AI解析またはフォームで求人情報を整えます。"],[FilePenLine,"媒体別原稿を作成","出力する媒体を選ぶと、原稿と媒体別サムネイルをまとめて生成します。"],[LineChart,"掲載結果から改善","表示・クリック・応募などの数値と過去原稿をもとに、改善案を作成します。"]].map(([Icon,title,body],i) => { const I=Icon as typeof WandSparkles; return <article key={title as string} className="relative rounded-xl border border-[#e9e4e2] bg-white p-5"><span className="absolute left-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-primary text-[12px] font-bold text-white">0{i+1}</span><I className="mx-auto mt-4 h-12 w-12 text-[#ef9cab]" strokeWidth={1.2}/><h3 className="mt-4 text-[14px] font-bold">{title as string}</h3><p className="mt-2 text-[12px] leading-5 text-gray-500">{body as string}</p>{i<2&&<ArrowRight className="absolute -right-5 top-1/2 z-10 hidden h-4 w-4 text-primary sm:block" />}</article>})}</div></div>
       </section>
 
-      <section id="outputs" className="scroll-mt-12 bg-[#f7f3ed] py-20 sm:py-28">
-        <div className="mx-auto max-w-[1180px] px-6 lg:px-8">
-          <Reveal>
-            <div className="max-w-2xl">
-              <p className="text-[11px] font-bold tracking-[0.16em] text-primary">WHAT YOU RECEIVE</p>
-              <h2 className="mt-3 font-serif text-3xl font-black tracking-[-0.055em] text-gray-950 sm:text-[2.6rem]">一度の入力から、掲載までに必要なものを。</h2>
-              <p className="mt-4 text-[15px] leading-7 text-gray-600">原稿のたたき台だけで終わりません。求人の魅力を伝える見せ方まで、媒体ごとの形に整えます。</p>
-            </div>
-          </Reveal>
-
-          <Reveal delay={100}>
-            <div className="mt-11 overflow-hidden rounded-[28px] border border-[#e3dbd2] bg-white shadow-[0_25px_70px_rgba(71,50,34,0.11)]">
-              <div className="flex items-center justify-between border-b border-[#eee8e1] px-5 py-4 sm:px-7">
-                <div className="flex items-center gap-2.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ff8c86]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ffd269]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#74cfa4]" />
-                  <span className="ml-2 text-[11px] font-medium text-gray-400">出力サンプル — 介護スタッフ</span>
-                </div>
-                <span className="hidden rounded-full bg-[#fff0f3] px-3 py-1 text-[10px] font-bold text-primary sm:inline">SAMPLE</span>
-              </div>
-              <div className="grid lg:grid-cols-[205px_minmax(0,1fr)]">
-                <aside className="border-b border-[#eee8e1] bg-[#fffdfb] p-5 lg:border-b-0 lg:border-r lg:p-6">
-                  <p className="text-[10px] font-bold tracking-[0.15em] text-gray-400">GENERATED ASSETS</p>
-                  <div className="mt-4 space-y-1">
-                    {["求人原稿", "サムネイル", "媒体別フォーマット", "改善メモ"].map((item, index) => (
-                      <div key={item} className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12px] ${index === 0 ? "bg-[#fff0f3] font-bold text-gray-900" : "text-gray-500"}`}>
-                        {index === 0 ? <Check className="h-3.5 w-3.5 text-primary" strokeWidth={3} /> : <span className="h-3.5 w-3.5 rounded-full border border-gray-300" />}
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-7 hidden rounded-xl bg-gray-900 p-4 text-white lg:block">
-                    <p className="text-[10px] font-bold tracking-[0.13em] text-white/50">QUALITY CHECK</p>
-                    <p className="mt-2 text-[12px] leading-5">表現・条件・根拠を見直してから、出力します。</p>
-                  </div>
-                </aside>
-                <div className="p-5 sm:p-8">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-bold tracking-[0.14em] text-gray-400">JOB COPY</p>
-                      <h3 className="mt-1 text-[18px] font-bold tracking-tight">【賞与年2回】介護スタッフ／未経験OK</h3>
-                    </div>
-                    <span className="rounded-full border border-[#b9dfd1] bg-[#effaf6] px-3 py-1.5 text-[11px] font-bold text-[#007766]">確認済み</span>
-                  </div>
-                  <div className="mt-5 rounded-2xl border border-[#eee8e1] bg-[#fffdfb] p-5">
-                    <p className="text-[13px] font-bold leading-6">残業は月平均5時間以下。家庭と両立しながら働ける、介護スタッフの募集です。</p>
-                    <p className="mt-3 text-[13px] leading-6 text-gray-600">資格取得支援あり。未経験から始めた先輩も多く、業務は段階的にお任せします。駅から徒歩5分の事業所です。</p>
-                  </div>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-[1.2fr_1fr]">
-                    <div className="overflow-hidden rounded-xl bg-gradient-to-br from-[#37232b] via-[#a23751] to-[#f58b87] p-4 text-white">
-                      <p className="text-[9px] font-bold tracking-[0.15em] text-white/65">THUMBNAIL SAMPLE</p>
-                      <p className="mt-5 text-[18px] font-bold leading-tight">未経験から、
-                        <br />介護の仕事へ。</p>
-                    </div>
-                    <div className="rounded-xl border border-[#eee8e1] p-4">
-                      <p className="text-[9px] font-bold tracking-[0.15em] text-gray-400">READY TO EXPORT</p>
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {platforms.map((platform) => (
-                          <span key={platform.name} className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-1.5 text-[10px] font-bold text-gray-600">
-                            <span className={`h-1.5 w-1.5 rounded-full ${platform.color}`} />
-                            {platform.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Reveal>
-        </div>
+      <section id="features" className="bg-[#282c30] py-8 text-white sm:py-10">
+        <div className="mx-auto grid max-w-[1160px] gap-8 px-5 lg:grid-cols-[230px_1fr]"><div className="self-center"><p className="text-[11px] font-bold tracking-[.15em] text-[#ff92a6]">FEATURES</p><h2 className="mt-3 text-[25px] font-black leading-9">原稿の品質と改善を<br />支える機能</h2><p className="mt-3 text-[12px] leading-6 text-gray-300">求人情報を原稿へ変換するだけでなく、調査・確認・画像作成・掲載後の改善まで支援します。</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{features.map(([Icon,title,body]) => <article key={title} className="rounded-xl border border-white/30 bg-white/[.02] px-4 py-6 text-center"><Icon className="mx-auto h-10 w-10 text-[#ff9cac]" strokeWidth={1.4}/><h3 className="mt-5 text-[14px] font-bold">{title}</h3><p className="mt-2 text-[12px] leading-6 text-gray-300">{body}</p></article>)}</div></div>
       </section>
 
-      <section id="how-it-works" className="scroll-mt-12 bg-white py-20 sm:py-28">
-        <div className="mx-auto max-w-[1180px] px-6 lg:px-8">
-          <Reveal>
-            <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-              <div>
-                <p className="text-[11px] font-bold tracking-[0.16em] text-primary">HOW IT WORKS</p>
-                <h2 className="mt-3 font-serif text-3xl font-black tracking-[-0.055em] text-gray-950 sm:text-[2.6rem]">求人をひとつ、前へ進める。</h2>
-              </div>
-              <p className="max-w-sm text-[14px] leading-6 text-gray-500">作成と改善を切り離さず、同じ求人の履歴として積み上げます。</p>
-            </div>
-          </Reveal>
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {[
-              { step: "01", title: "求人を登録する", body: "事業所・職種・雇用条件を入力。既存の求人票を参考にすることもできます。", icon: PenLine },
-              { step: "02", title: "原稿を受け取る", body: "原稿、サムネイル、媒体ごとの出力を確認し、掲載準備を進めます。", icon: Sparkles },
-              { step: "03", title: "掲載後に改善する", body: "応募・クリックなどの数値をもとに、次の掲載に向けた改善案を確認します。", icon: BarChart3 },
-            ].map((item, index) => (
-              <Reveal key={item.step} delay={(index + 1) * 90}>
-                <article className="relative h-full overflow-hidden rounded-2xl border border-[#e8e4df] bg-[#fffdfb] p-7 transition-transform hover:-translate-y-1 hover:shadow-lg">
-                  <span className="absolute right-5 top-4 font-serif text-6xl font-black tracking-[-0.1em] text-[#f3eee8]">{item.step}</span>
-                  <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-[#fff0f3] text-primary"><item.icon className="h-5 w-5" /></div>
-                  <h3 className="relative mt-7 text-[17px] font-bold tracking-tight">{item.title}</h3>
-                  <p className="relative mt-2.5 text-[13px] leading-6 text-gray-500">{item.body}</p>
-                </article>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section id="media" className="scroll-mt-8 py-10 sm:py-14"><div className="mx-auto max-w-[1160px] px-5"><p className="text-[11px] font-bold tracking-[.15em] text-primary">MEDIA</p><h2 className="mt-2 text-[24px] font-black">4つの求人媒体向けに出力</h2><p className="mt-2 text-[13px] text-gray-500">選択した媒体の項目構成・文字数・表現ルールを踏まえて、原稿を生成します。</p><div className="mt-7"><MediaLogos /></div></div></section>
 
-      <section className="bg-gray-950 py-20 text-white sm:py-28">
-        <div className="mx-auto grid max-w-[1180px] gap-12 px-6 lg:grid-cols-[0.82fr_1.18fr] lg:px-8">
-          <Reveal>
-            <div>
-              <p className="text-[11px] font-bold tracking-[0.16em] text-[#ff9caf]">BUILT FOR CONFIDENCE</p>
-              <h2 className="mt-3 font-serif text-3xl font-black leading-tight tracking-[-0.055em] sm:text-[2.5rem]">生成するだけで、
-                <br />終わらせない。</h2>
-              <p className="mt-5 max-w-sm text-[14px] leading-7 text-gray-300">求人原稿は、公開してからも育てていくもの。採用エージェントは、作成の前後にある確認と改善の工程まで支えます。</p>
-            </div>
-          </Reveal>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { icon: SearchCheck, title: "トレンドを調べる", body: "求人市場の動きや表現の傾向を、原稿づくりの材料にします。" },
-              { icon: BadgeCheck, title: "事実を確認する", body: "入力された条件と原稿を照らし合わせ、確認が必要な点を見つけます。" },
-              { icon: TrendingUp, title: "履歴から学ぶ", body: "過去の原稿と掲載結果を参照し、次の改善へつなげます。" },
-            ].map((item) => (
-              <Reveal key={item.title} delay={100}>
-                <article className="h-full rounded-2xl border border-white/15 bg-white/[0.06] p-5 backdrop-blur-sm">
-                  <item.icon className="h-5 w-5 text-[#ff9caf]" />
-                  <h3 className="mt-8 text-[15px] font-bold">{item.title}</h3>
-                  <p className="mt-2 text-[12px] leading-6 text-gray-300">{item.body}</p>
-                </article>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section id="use-cases" className="scroll-mt-8 bg-[linear-gradient(105deg,#fff9f8,#fff)] py-12"><div className="mx-auto max-w-[1160px] px-5"><p className="text-[11px] font-bold tracking-[.15em] text-primary">USE CASES</p><h2 className="mt-2 text-[24px] font-black">採用業務での活用例</h2><div className="mt-7 grid gap-4 lg:grid-cols-3">{[["新しい求人を立ち上げるとき","求人票や会社情報から、必要項目を整理したい","テキスト・画像・PDF・参考URLをAIが解析し、求人情報の入力を支援します。"],["複数媒体へ掲載するとき","同じ求人を媒体ごとに書き分けたい","共通情報から、Indeed・AirWork・JobMedley・ハローワーク向けの原稿を生成します。"],["掲載後に見直すとき","数値を見ても、直すべき箇所が分からない","掲載数値と過去原稿を分析し、変更前後の差分と改善理由を確認できます。"]].map(([scene,title,body],i)=><article key={scene} className="flex min-h-[220px] overflow-hidden rounded-xl border border-[#e7e2df] bg-white shadow-[0_4px_12px_rgba(50,29,32,.04)]"><Portrait index={i}/><div className="p-5"><p className="text-[11px] font-bold text-primary">{scene}</p><h3 className="mt-4 text-[15px] font-bold leading-6">{title}</h3><p className="mt-3 text-[12px] leading-5 text-gray-500">{body}</p></div></article>)}</div></div></section>
 
-      <section id="platforms" className="scroll-mt-12 bg-[#fffdfb] py-20 sm:py-24">
-        <div className="mx-auto max-w-[1180px] px-6 lg:px-8">
-          <Reveal>
-            <div className="text-center">
-              <p className="text-[11px] font-bold tracking-[0.16em] text-primary">PLATFORMS</p>
-              <h2 className="mt-3 font-serif text-3xl font-black tracking-[-0.055em] text-gray-950">主要4媒体へ、それぞれの形で。</h2>
-            </div>
-          </Reveal>
-          <div className="mt-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {platforms.map((platform, index) => (
-              <Reveal key={platform.name} delay={index * 70}>
-                <div className="rounded-xl border border-[#e8e4df] bg-white px-5 py-5">
-                  <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${platform.color}`} /><span className="text-[14px] font-bold">{platform.name}</span></div>
-                  <p className="mt-2 text-[11px] text-gray-400">{platform.sub}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section className="bg-[#fffafa] pb-8"><div className="mx-auto max-w-[1160px] px-5"><div className="overflow-hidden rounded-xl bg-[linear-gradient(110deg,#ff657d,#ff224e)] text-white shadow-[0_12px_30px_rgba(255,56,92,.22)]"><div className="grid items-center gap-5 px-7 py-7 sm:grid-cols-[1.15fr_.85fr_.6fr]"><div><h2 className="text-[22px] font-bold">最初の求人原稿を作成する</h2><p className="mt-2 text-[13px] leading-6 text-white/85">ログイン後、事業所と求人を登録してください。<br />求人情報の入力から媒体別原稿の生成へ進めます。</p></div><PinkButton className="w-full bg-white text-primary shadow-none hover:bg-white">求人原稿を作成する</PinkButton><div className="hidden h-24 rounded-t-lg border-4 border-b-0 border-white/60 bg-white/95 p-2 sm:block"><div className="h-2 w-1/3 rounded bg-[#ffd8df]"/><div className="mt-2 h-2 w-4/5 rounded bg-gray-100"/><div className="mt-2 h-9 rounded bg-[#fff0f3]"/></div></div></div></div></section>
 
-      <section className="bg-[#fffdfb] pb-20 sm:pb-28">
-        <div className="mx-auto max-w-[1180px] px-6 lg:px-8">
-          <Reveal>
-            <div className="relative overflow-hidden rounded-[30px] bg-primary px-7 py-14 text-center text-white sm:px-12 sm:py-20">
-              <div className="absolute -left-24 -top-28 h-72 w-72 rounded-full bg-white/15 blur-2xl" aria-hidden />
-              <div className="absolute -bottom-36 -right-14 h-80 w-80 rounded-full bg-[#a50e2e]/50 blur-3xl" aria-hidden />
-              <div className="relative mx-auto max-w-xl">
-                <p className="text-[11px] font-bold tracking-[0.16em] text-white/70">START WITH ONE JOB</p>
-                <h2 className="mt-4 font-serif text-3xl font-black tracking-[-0.055em] sm:text-[2.65rem]">最初の求人原稿から、
-                  <br />採用を変えていく。</h2>
-                <p className="mt-5 text-[14px] leading-7 text-white/85">まずはひとつの求人を登録して、採用エージェントの出力を確かめてください。</p>
-                <Link href={START_HREF} className="mt-8 inline-block">
-                  <Button size="lg" className="h-13 rounded-full bg-white px-7 text-[15px] font-bold text-primary shadow-lg hover:bg-[#fff1f3]">
-                    求人原稿を作成する
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <footer className="border-t border-[#e8e4df] bg-white py-8">
-        <div className="mx-auto flex max-w-[1180px] flex-col gap-4 px-6 text-[12px] text-gray-400 sm:flex-row sm:items-center sm:justify-between lg:px-8">
-          <div className="flex items-center gap-2"><span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-gray-900 text-[9px] font-bold text-white">採</span><span className="font-medium text-gray-600">採用エージェント</span></div>
-          <div className="flex gap-4"><a href="#platforms" className="hover:text-gray-800">対応媒体</a><Link href="/login" className="hover:text-gray-800">ログイン</Link></div>
-        </div>
-      </footer>
+      <footer className="bg-white py-9"><div className="mx-auto grid max-w-[1160px] gap-8 px-5 text-[12px] text-gray-500 sm:grid-cols-[1.2fr_2fr_.4fr]"><div><BrandMark /><p className="mt-3 leading-6">求人情報の入力から媒体別原稿・サムネイルの作成、<br />掲載結果を使った改善まで支援します。</p></div><div className="grid grid-cols-3 gap-4 leading-7"><div><b className="text-gray-800">求人作成</b><p>AIかんたん入力<br/>媒体別原稿<br/>サムネイル生成<br/>作成履歴</p></div><div><b className="text-gray-800">ブラッシュアップ</b><p>掲載数値の分析<br/>改善差分<br/>課題サマリー<br/>予算提案（Indeed）</p></div><div><b className="text-gray-800">対応媒体</b><p>Indeed<br/>AirWork<br/>JobMedley<br/>ハローワーク</p></div></div><p className="self-end text-right">© 2026 HR Agent Inc.</p></div></footer>
     </main>
   );
 }
