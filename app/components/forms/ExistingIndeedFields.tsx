@@ -395,7 +395,7 @@ export function ExistingIndeedFields({ data, metrics, onChange, onMetricsChange 
           </div>
           <div className="space-y-2">
             <Label>キャッチコピー</Label>
-            <Input value={data.catchphrase || ""} onChange={(e) => onChange({ catchphrase: e.target.value })} placeholder="未経験OK！残業ほぼなし" maxLength={50} />
+            <Input value={data.catchphrase || ""} onChange={(e) => onChange({ catchphrase: e.target.value })} placeholder="未経験OK！残業ほぼなし" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

@@ -61,16 +61,15 @@ export function IndeedFields({ data, onChange }: IndeedFieldsProps) {
 
       {/* キャッチコピー（任意） */}
       <div className="space-y-2">
-        <Label htmlFor="indeed-catchphrase">キャッチコピー（任意・最大50文字）</Label>
+        <Label htmlFor="indeed-catchphrase">キャッチコピー（任意）</Label>
         <Input
           id="indeed-catchphrase"
           value={data.catchphrase || ""}
           onChange={(e) => onChange({ catchphrase: e.target.value })}
           placeholder="AIが自動生成します（入力は任意）"
-          maxLength={50}
         />
         <p className="text-xs text-muted-foreground">
-          {(data.catchphrase || "").length}/50文字
+          {(data.catchphrase || "").length}文字
         </p>
       </div>
 

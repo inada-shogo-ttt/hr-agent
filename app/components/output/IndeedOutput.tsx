@@ -247,8 +247,8 @@ ${posting.hiringManagerName ? `\n【採用担当者】\n${posting.hiringManagerN
         {posting.postalCode && (
           <FieldBlock label="郵便番号" value={posting.postalCode} editable={editable} fieldKey="postalCode" onFieldChange={onFieldChange} />
         )}
-        <FieldBlock label="職種名" value={posting.jobTitle} charLimit={30} editable={editable} fieldKey="jobTitle" onFieldChange={onFieldChange} />
-        <FieldBlock label="キャッチコピー" value={posting.catchphrase} charLimit={50} editable={editable} fieldKey="catchphrase" onFieldChange={onFieldChange} />
+        <FieldBlock label="職種名" value={posting.jobTitle} editable={editable} fieldKey="jobTitle" onFieldChange={onFieldChange} />
+        <FieldBlock label="キャッチコピー" value={posting.catchphrase} editable={editable} fieldKey="catchphrase" onFieldChange={onFieldChange} />
         <FieldBlock label="採用予定人数" value={posting.numberOfHires} editable={editable} fieldKey="numberOfHires" onFieldChange={onFieldChange} />
         <FieldBlock label="勤務地" value={posting.location} editable={editable} fieldKey="location" onFieldChange={onFieldChange} />
         <FieldBlock label="雇用形態" value={posting.employmentType} editable={editable} fieldKey="employmentType" onFieldChange={onFieldChange} />
