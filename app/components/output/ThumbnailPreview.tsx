@@ -2,9 +2,11 @@
 
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash2, Plus, ImageIcon } from "lucide-react";
+import { Download, Upload, Trash2, Plus, ImageIcon, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { ThumbnailRegenerateDialog } from "./ThumbnailRegenerateDialog";
 import { ThumbnailSlotOption } from "@/lib/thumbnail-prompts";
+import { createZip, ZipEntry } from "@/lib/zip";
 
 interface ThumbnailPreviewProps {
   urls: string[];
@@ -18,13 +20,39 @@ interface ThumbnailPreviewProps {
   onUrlsChange?: (urls: string[]) => void;
 }
 
-function downloadImage(url: string, filename: string) {
+// 媒体ごとの生成解像度に合わせたプレビュー比率
+// (lib/nanobanana.ts の PLATFORM_IMAGE_CONFIG と対応: indeed/airwork=800×600, jobmedley=1024×576)
+const PLATFORM_ASPECT_CLASS: Record<string, string> = {
+  indeed: "aspect-[4/3]",
+  airwork: "aspect-[4/3]",
+  jobmedley: "aspect-video",
+};
+
+function extFromMimeType(type: string): string {
+  if (type.includes("png")) return "png";
+  if (type.includes("webp")) return "webp";
+  return "jpg";
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
+  a.href = objectUrl;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
+// 画像をブラウザに即ダウンロードさせる。
+// ストレージの画像はクロスオリジンURLのため a[download] が無視され
+// 「タブで開くだけ」になる。blob 化してから保存させる
+async function downloadImage(url: string, baseName: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  downloadBlob(blob, `${baseName}.${extFromMimeType(blob.type)}`);
 }
 
 export function ThumbnailPreview({
@@ -39,24 +67,59 @@ export function ThumbnailPreview({
 }: ThumbnailPreviewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
+  // 媒体が指定されていれば生成解像度に合った比率で表示する(未指定は16:9)
+  const aspectClass = (platform && PLATFORM_ASPECT_CLASS[platform]) || "aspect-video";
+
   if (urls.length === 0 && !editable) return null;
 
-  const handleDownloadCurrent = () => {
-    const url = urls[selectedIndex];
-    const ext = url.includes(".png") || url.startsWith("data:image/png") ? "png" : "jpg";
-    downloadImage(url, `${filenamePrefix}_${selectedIndex + 1}.${ext}`);
+  const handleDownloadCurrent = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadImage(urls[selectedIndex], `${filenamePrefix}_${selectedIndex + 1}`);
+    } catch {
+      // 自動保存できない場合のフォールバック(新しいタブで開く)
+      window.open(urls[selectedIndex], "_blank");
+      toast.error("自動保存できなかったため、新しいタブで開きました");
+    } finally {
+      setDownloading(false);
+    }
   };
 
-  const handleDownloadAll = () => {
-    urls.forEach((url, i) => {
-      const ext = url.includes(".png") || url.startsWith("data:image/png") ? "png" : "jpg";
-      setTimeout(() => {
-        downloadImage(url, `${filenamePrefix}_${i + 1}.${ext}`);
-      }, i * 200);
-    });
+  // 複数ファイルの自動ダウンロードはブラウザが2枚目以降をブロックするため、
+  // 全枚数を1つの ZIP にまとめて単一ダウンロードにする
+  const handleDownloadAll = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    setDownloadProgress(`0/${urls.length}`);
+    try {
+      let fetched = 0;
+      const files: ZipEntry[] = await Promise.all(
+        urls.map(async (url, i) => {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          fetched++;
+          setDownloadProgress(`${fetched}/${urls.length}`);
+          return {
+            name: `${filenamePrefix}_${i + 1}.${extFromMimeType(blob.type)}`,
+            data: new Uint8Array(await blob.arrayBuffer()),
+          };
+        })
+      );
+      downloadBlob(createZip(files), `${filenamePrefix}_all.zip`);
+      toast.success(`${files.length}枚の画像をZIPにまとめて保存しました`);
+    } catch {
+      toast.error("画像の保存に失敗しました");
+    } finally {
+      setDownloading(false);
+      setDownloadProgress(null);
+    }
   };
 
   async function uploadFile(file: File): Promise<string | null> {
@@ -159,7 +222,7 @@ export function ThumbnailPreview({
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="w-full aspect-video rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 bg-gray-50 flex flex-col items-center justify-center gap-2 transition-colors"
+          className={`w-full ${aspectClass} rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 bg-gray-50 flex flex-col items-center justify-center gap-2 transition-colors`}
           disabled={uploading}
         >
           {uploading ? (
@@ -196,14 +259,20 @@ export function ThumbnailPreview({
       />
 
       {/* メイン画像 */}
-      <div className="relative w-full aspect-video rounded-lg overflow-hidden border bg-gray-100 group">
+      <div className={`relative w-full ${aspectClass} rounded-lg overflow-hidden border bg-gray-100 group`}>
         <img
           src={urls[selectedIndex]}
           alt={`サムネイル ${selectedIndex + 1}`}
           className="w-full h-full object-cover"
         />
-        {/* ホバー時のアクションボタン */}
-        <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* アクションボタン(タッチ端末では常時表示、PCではホバー表示。保存中は表示を維持) */}
+        <div
+          className={`absolute top-2 right-2 flex gap-1.5 transition-opacity ${
+            downloading
+              ? "opacity-100"
+              : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
+          }`}
+        >
           {editable && (
             <>
               <Button
@@ -230,9 +299,14 @@ export function ThumbnailPreview({
             variant="secondary"
             size="sm"
             onClick={handleDownloadCurrent}
+            disabled={downloading}
             className="h-8 px-3 text-xs bg-white/90 hover:bg-white shadow-sm backdrop-blur-sm"
           >
-            <Download className="w-3.5 h-3.5 mr-1.5" />
+            {downloading && !downloadProgress ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+            )}
             保存
           </Button>
           {urls.length > 1 && (
@@ -240,10 +314,20 @@ export function ThumbnailPreview({
               variant="secondary"
               size="sm"
               onClick={handleDownloadAll}
+              disabled={downloading}
               className="h-8 px-3 text-xs bg-white/90 hover:bg-white shadow-sm backdrop-blur-sm"
             >
-              <Download className="w-3.5 h-3.5 mr-1.5" />
-              全て保存
+              {downloadProgress ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  保存中 {downloadProgress}
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5 mr-1.5" />
+                  全て保存
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -259,7 +343,7 @@ export function ThumbnailPreview({
         {urls.map((url, index) => (
           <div
             key={index}
-            className={`shrink-0 relative w-20 aspect-video rounded overflow-hidden border-2 transition-all cursor-pointer ${
+            className={`shrink-0 relative w-20 ${aspectClass} rounded overflow-hidden border-2 transition-all cursor-pointer ${
               index === selectedIndex
                 ? "border-blue-500"
                 : "border-gray-200 hover:border-gray-400"
@@ -288,7 +372,7 @@ export function ThumbnailPreview({
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="shrink-0 w-20 aspect-video rounded border-2 border-dashed border-gray-300 hover:border-gray-400 flex items-center justify-center transition-colors"
+            className={`shrink-0 w-20 ${aspectClass} rounded border-2 border-dashed border-gray-300 hover:border-gray-400 flex items-center justify-center transition-colors`}
           >
             <Plus className="w-5 h-5 text-gray-400" />
           </button>

@@ -248,7 +248,7 @@ export default function JobRewritePostingPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ThumbnailPreview urls={thumbnailUrls} filenamePrefix="current_thumbnail" />
+              <ThumbnailPreview urls={thumbnailUrls} filenamePrefix="current_thumbnail" platform={platform} />
             </CardContent>
           </Card>
         )}

@@ -33,6 +33,14 @@ const PLATFORM_LABELS: Record<string, string> = {
   jobmedley: "ジョブメドレー",
 };
 
+// 媒体ごとの生成解像度に合わせたプレビュー比率
+// (lib/nanobanana.ts の PLATFORM_IMAGE_CONFIG と対応: indeed/airwork=800×600, jobmedley=1024×576)
+const PLATFORM_ASPECT_CLASS: Record<string, string> = {
+  indeed: "aspect-[4/3]",
+  airwork: "aspect-[4/3]",
+  jobmedley: "aspect-video",
+};
+
 export function ThumbnailRegenerateDialog({
   jobId,
   platform,
@@ -56,6 +64,7 @@ export function ThumbnailRegenerateDialog({
   const lastAutoPromptRef = useRef("");
 
   const slotMode = !!slotOptions?.length;
+  const aspectClass = PLATFORM_ASPECT_CLASS[platform] || "aspect-video";
 
   function slotBasePrompt(index: number, reference: string | null): string {
     const option = slotOptions![index];
@@ -220,7 +229,7 @@ export function ThumbnailRegenerateDialog({
                     onClick={() =>
                       updateReferenceImage(referenceImage === url ? null : url)
                     }
-                    className={`shrink-0 relative w-24 aspect-video rounded overflow-hidden border-2 transition-all ${
+                    className={`shrink-0 relative w-24 ${aspectClass} rounded overflow-hidden border-2 transition-all ${
                       referenceImage === url
                         ? "border-blue-500 ring-2 ring-blue-200"
                         : "border-gray-200 hover:border-gray-400"
@@ -240,7 +249,7 @@ export function ThumbnailRegenerateDialog({
                 ))}
                 {/* アップロードした参考画像（既存サムネイル以外） */}
                 {referenceImage && !currentUrls.includes(referenceImage) && (
-                  <div className="shrink-0 relative w-24 aspect-video rounded overflow-hidden border-2 border-blue-500 ring-2 ring-blue-200">
+                  <div className={`shrink-0 relative w-24 ${aspectClass} rounded overflow-hidden border-2 border-blue-500 ring-2 ring-blue-200`}>
                     <img
                       src={referenceImage}
                       alt="アップロード画像"
@@ -257,7 +266,7 @@ export function ThumbnailRegenerateDialog({
                 )}
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="shrink-0 w-24 aspect-video rounded border-2 border-dashed border-gray-300 hover:border-gray-400 flex flex-col items-center justify-center gap-0.5 transition-colors"
+                  className={`shrink-0 w-24 ${aspectClass} rounded border-2 border-dashed border-gray-300 hover:border-gray-400 flex flex-col items-center justify-center gap-0.5 transition-colors`}
                 >
                   <Upload className="w-4 h-4 text-gray-400" />
                   <span className="text-[10px] text-gray-500">アップロード</span>
@@ -340,7 +349,7 @@ export function ThumbnailRegenerateDialog({
                 {Array.from({ length: count }).map((_, i) => (
                   <div
                     key={i}
-                    className="aspect-video rounded-lg bg-gray-100 animate-pulse"
+                    className={`${aspectClass} rounded-lg bg-gray-100 animate-pulse`}
                     style={{ animationDelay: `${i * 150}ms` }}
                   />
                 ))}
@@ -359,7 +368,7 @@ export function ThumbnailRegenerateDialog({
                     <button
                       key={index}
                       onClick={() => toggleSelected(index)}
-                      className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all ${
+                      className={`relative ${aspectClass} rounded-lg overflow-hidden border-2 transition-all ${
                         selected.has(index)
                           ? "border-blue-500 ring-2 ring-blue-200"
                           : "border-gray-200 opacity-60 hover:opacity-100"
