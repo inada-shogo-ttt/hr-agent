@@ -214,6 +214,13 @@ export default function Home() {
         <div className="lp-hero-ribbon absolute -bottom-5 right-0 h-20 w-[42%] -skew-y-6 bg-primary/35" /><div className="lp-hero-ribbon lp-hero-ribbon-back absolute -bottom-10 right-0 h-20 w-[31%] -skew-y-3 bg-primary/60" />
       </section>
 
+      <section id="media" className="lp-media scroll-mt-8 overflow-hidden py-12 sm:py-16">
+        <div className="mx-auto max-w-[1160px] px-5">
+          <Reveal direction="left"><div><p className="text-[11px] font-bold tracking-[.15em] text-primary">MEDIA</p><h2 className="mt-2 text-[24px] font-black">4つの求人媒体向けに出力</h2><p className="mt-2 text-[13px] text-gray-500">選択した媒体の項目構成・文字数・表現ルールを踏まえて、原稿を生成します。</p></div></Reveal>
+        </div>
+        <Reveal direction="right" distance={90} delay={100}><div className="mt-8"><MediaMarquee /></div></Reveal>
+      </section>
+
       <section className="lp-pains border-b border-[#eee9e7] bg-white py-10">
         <div className="mx-auto max-w-[1120px] px-5">
           <Reveal direction="scale"><h2 className="text-center text-[20px] font-bold">求人原稿の作成と改善を、ひとつの場所で</h2></Reveal>
@@ -279,13 +286,6 @@ export default function Home() {
             ))}
           </div>
         </div>
-      </section>
-
-      <section id="media" className="lp-media scroll-mt-8 overflow-hidden py-12 sm:py-16">
-        <div className="mx-auto max-w-[1160px] px-5">
-          <Reveal direction="left"><div><p className="text-[11px] font-bold tracking-[.15em] text-primary">MEDIA</p><h2 className="mt-2 text-[24px] font-black">4つの求人媒体向けに出力</h2><p className="mt-2 text-[13px] text-gray-500">選択した媒体の項目構成・文字数・表現ルールを踏まえて、原稿を生成します。</p></div></Reveal>
-        </div>
-        <Reveal direction="right" distance={90} delay={100}><div className="mt-8"><MediaMarquee /></div></Reveal>
       </section>
 
       <section id="pricing" className="lp-pricing scroll-mt-8 overflow-hidden py-16 sm:py-20">

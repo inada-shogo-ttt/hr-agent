@@ -464,7 +464,7 @@ html {
 }
 
 .lp-hero {
-  min-height: calc(100svh - 72px);
+  min-height: 680px;
   perspective: 1400px;
 }
 
