@@ -1,11 +1,20 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { runTextImprovementAgent } from "@/lib/agents/team-b/text-improvement";
 import { runDesignImprovementAgent } from "@/lib/agents/team-b/design-improvement";
 import { runBudgetOptimizationAgent } from "@/lib/agents/team-b/budget-optimization";
 import { TeamBInput, TeamBOutput, IndeedMetrics, ExistingPostingFields } from "@/types/team-b";
-import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
+import { TeamBSSEEvent, TeamBAgentId, TeamBWorkflowCompleteData } from "@/lib/agents/team-b/types";
 import { ReferencePostingData } from "@/types/reference";
 import { supabase } from "@/lib/supabase";
+import { getOwnedJob } from "@/lib/org-scope";
+import { applyTeamBResultToManuscript } from "@/lib/job-records";
+import { uploadThumbnailImages } from "@/lib/thumbnail-storage";
+import {
+  createWorkflowRun,
+  updateWorkflowRun,
+  touchWorkflowRun,
+  WorkflowAgentStatuses,
+} from "@/lib/workflow-run";
 import { getFormattedMemories, saveMemories, updateEffectiveness } from "@/lib/agents/team-b/memory";
 import { getFormattedKnowledge } from "@/lib/shared-knowledge";
 import { getPlatformGuidelines } from "@/lib/platform-guidelines";
@@ -27,11 +36,16 @@ function sendEvent(
   controller: ReadableStreamDefaultController,
   event: TeamBSSEEvent
 ): void {
-  controller.enqueue(new TextEncoder().encode(createSSEMessage(event)));
+  try {
+    controller.enqueue(new TextEncoder().encode(createSSEMessage(event)));
+  } catch {
+    // クライアント切断後は送信できない。ワークフローは継続し、結果は WorkflowRun に永続化する
+  }
 }
 
 interface TeamBRequestBody extends TeamBInput {
   jobId?: string;
+  runId?: string;
   industry?: string;
   jobType?: string;
   historyContext?: unknown[];
@@ -91,24 +105,57 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const runId = typeof input.runId === "string" ? input.runId : crypto.randomUUID();
+
+  // クライアントが切断してもワークフロー完了(結果の永続化)まで関数を生存させる
+  let resolveWorkflowDone!: () => void;
+  const workflowDone = new Promise<void>((resolve) => {
+    resolveWorkflowDone = resolve;
+  });
+  after(workflowDone);
+
   const stream = new ReadableStream({
     async start(controller) {
       const now = () => new Date().toISOString();
 
-      // Vercelプロキシの接続切断を防ぐため、15秒ごとにハートビートを送信
+      // 実行状態を永続化(接続断後の復旧用)。jobId が無い場合は追跡しない
+      const trackRun = !!input.jobId;
+      const agentStatuses: WorkflowAgentStatuses = {};
+      const persistStatuses = () => {
+        if (trackRun) void updateWorkflowRun(runId, { agentStatuses });
+      };
+      if (input.jobId) {
+        await createWorkflowRun({
+          id: runId,
+          jobId: input.jobId,
+          orgId: auth.user.orgId,
+          userId: auth.user.id,
+          kind: "team-b",
+        });
+      }
+
+      // Vercelプロキシの接続切断を防ぐため、15秒ごとにハートビートを送信。
+      // あわせて30秒ごとに WorkflowRun.updatedAt を更新(クライアントの生存判定用)
+      let heartbeatCount = 0;
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
         } catch {
           // ストリームが既に閉じている場合は無視
         }
+        heartbeatCount++;
+        if (trackRun && heartbeatCount % 2 === 0) void touchWorkflowRun(runId);
       }, 15000);
 
       const startAgent = (agentId: TeamBAgentId, message: string) => {
+        agentStatuses[agentId] = { status: "running", message };
+        persistStatuses();
         sendEvent(controller, { type: "agent_start", agentId, message, timestamp: now() });
       };
 
       const completeAgent = (agentId: TeamBAgentId, message: string, data?: unknown) => {
+        agentStatuses[agentId] = { status: "completed", message };
+        persistStatuses();
         sendEvent(controller, { type: "agent_complete", agentId, message, data, timestamp: now() });
       };
 
@@ -330,7 +377,23 @@ export async function POST(request: NextRequest) {
           console.warn("[team-b] メモリ保存エラー（続行）:", e);
         }
 
-        // 最終出力を組み立て（TeamBOutput 形状は従来互換）
+        // サムネイルをサーバ側で Storage にアップロード(SSE には base64 を流さない)
+        const uploadedThumbnails: string[] = [];
+        if (input.jobId) {
+          for (const key of ["indeed", "airwork", "jobmedley"] as const) {
+            const images = platformThumbnails[key];
+            if (images?.length) {
+              try {
+                const urls = await uploadThumbnailImages(images, input.jobId, `teamB-${key}`);
+                uploadedThumbnails.push(...urls);
+              } catch (e) {
+                console.warn(`[team-b] ${key} サムネイルアップロード失敗:`, e);
+              }
+            }
+          }
+        }
+
+        // 最終出力を組み立て（TeamBOutput 形状は従来互換。サムネイルは Storage URL）
         const finalOutput: TeamBOutput = {
           platform: input.platform,
           issuesSummary: textResult.issues,
@@ -338,12 +401,52 @@ export async function POST(request: NextRequest) {
           manuscriptAnalysis: textResult.overallAssessment,
           improvements: textResult.improvements,
           improvedPosting: textResult.improvedPosting as ExistingPostingFields,
-          thumbnailUrls: designResult.thumbnailUrls,
-          platformThumbnails,
+          thumbnailUrls: uploadedThumbnails,
           budgetRecommendation: budgetResult?.recommendation,
           apiCostYen: getTrackedCostYen() ?? undefined,
           generatedAt: now(),
         };
+
+        // 履歴保存(サーバ側で保存するため、接続が切断されても結果が残る)
+        let recordId: string | null = null;
+        let recordSaveError: string | undefined;
+        if (input.jobId) {
+          const owned = await getOwnedJob(input.jobId, auth.user, "write");
+          if ("error" in owned) {
+            recordSaveError =
+              "改善履歴の保存に失敗しました。ログイン中のアカウントとこの求人の組織が一致しているか確認してください。";
+          } else {
+            const { data: record, error: recordError } = await supabase
+              .from("JobRecord")
+              .insert({
+                id: crypto.randomUUID(),
+                jobId: input.jobId,
+                type: "team-b",
+                platform: input.platform,
+                inputData: input.existingPosting ? JSON.stringify(input.existingPosting) : null,
+                outputData: JSON.stringify(finalOutput),
+                metricsData: input.metrics ? JSON.stringify(input.metrics) : null,
+                thumbnailUrls:
+                  uploadedThumbnails.length > 0 ? JSON.stringify(uploadedThumbnails) : null,
+                createdAt: now(),
+              })
+              .select("id")
+              .single();
+            if (recordError || !record) {
+              console.error("[team-b] 履歴保存に失敗:", recordError?.message);
+              recordSaveError =
+                "改善履歴の保存に失敗しました。結果は表示されますが履歴には残りません。";
+            } else {
+              recordId = record.id as string;
+              // 改善結果は最新 team-a レコード(=求人詳細が表示する現在原稿)にも反映する
+              await applyTeamBResultToManuscript(
+                input.jobId,
+                input.platform,
+                finalOutput as unknown as Record<string, unknown>
+              );
+            }
+          }
+        }
 
         // 実行成功時のみ課金記録(失敗しても改善処理は完了扱い)
         try {
@@ -358,24 +461,49 @@ export async function POST(request: NextRequest) {
           console.error("[team-b] 課金記録に失敗:", e);
         }
 
+        // 実行状態を完了として永続化(接続断後の復旧ポーリング用)
+        if (trackRun) {
+          await updateWorkflowRun(runId, {
+            status: "completed",
+            agentStatuses,
+            outputData: finalOutput,
+            recordId: recordId ?? undefined,
+          });
+        }
+
+        const completeData: TeamBWorkflowCompleteData = {
+          output: finalOutput,
+          recordId,
+          recordSaveError,
+        };
         sendEvent(controller, {
           type: "workflow_complete",
           agentId: "tb-text-improvement",
           message: "原稿改善が完了しました",
-          data: finalOutput,
+          data: completeData,
           timestamp: now(),
         });
       } catch (error) {
         console.error("[team-b] Workflow error:", error);
+        const message =
+          error instanceof Error ? error.message : "ワークフロー実行中にエラーが発生しました";
+        if (trackRun) {
+          await updateWorkflowRun(runId, { status: "error", errorMessage: message });
+        }
         sendEvent(controller, {
           type: "workflow_error",
           agentId: "tb-text-improvement",
-          message: error instanceof Error ? error.message : "ワークフロー実行中にエラーが発生しました",
+          message,
           timestamp: now(),
         });
       } finally {
         clearInterval(heartbeat);
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // クライアント切断でストリームが既に閉じている場合は無視
+        }
+        resolveWorkflowDone();
       }
     },
   });

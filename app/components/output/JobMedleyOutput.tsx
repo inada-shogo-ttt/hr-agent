@@ -48,6 +48,8 @@ function FieldBlock({
   onFieldChange?: (field: string, value: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  // 生成AIの出力にフィールドが欠けることがあるため undefined/null を空文字に正規化
+  value = value ?? "";
   const count = value.length;
   const isOver = charLimit ? count > charLimit : false;
 

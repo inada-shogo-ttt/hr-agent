@@ -10,6 +10,7 @@ import {
   RefreshCw, FileText, BarChart3, Clock,
   ChevronDown, ChevronUp, Copy, Check, ImageIcon,
   CheckCircle, PenLine, ChevronRight, Plus, Trash2, Building2, Coins,
+  ArrowLeft,
 } from "lucide-react";
 import {
   Select,
@@ -32,15 +33,16 @@ import { ManuscriptOutput } from "@/app/components/output/ManuscriptOutput";
 import { AllPlatformPostings } from "@/types/platform";
 import { toast } from "sonner";
 
+// 履歴一覧はメタ情報のみ(原稿全文は展開時に /records/[recordId] から遅延取得)
 interface JobRecord {
   id: string;
   type: string;
   platform: string;
   createdAt: string;
-  inputData: string | null;
-  outputData: string | null;
-  metricsData: string | null;
   thumbnailUrls: string | null;
+  platforms: string[];        // team-a: outputData に含まれる媒体
+  improvementCount: number;   // team-b: 改善箇所数
+  apiCostYen: number | null;
 }
 
 interface JobDetail {
@@ -52,6 +54,8 @@ interface JobDetail {
   createdBy: string | null;
   createdAt: string;
   records: JobRecord[];
+  latestManuscript: AllPlatformPostings | null;
+  latestRecordId: string | null;
 }
 
 interface SourceJobEntry {
@@ -156,8 +160,12 @@ function CopyFieldButton({ text }: { text: string }) {
   );
 }
 
-function RecordPreview({ record, index, total }: { record: JobRecord; index: number; total: number }) {
+function RecordPreview({ jobId, record, index, total }: { jobId: string; record: JobRecord; index: number; total: number }) {
   const [expanded, setExpanded] = useState(false);
+  // 原稿全文は展開時に遅延取得する(一覧ペイロード削減のため)
+  const [detailOutputData, setDetailOutputData] = useState<string | null>(null);
+  const [detailLoaded, setDetailLoaded] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const isTeamA = record.type === "team-a";
 
   // サムネイルURLをパース
@@ -168,13 +176,29 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
     } catch { /* ignore */ }
   }
 
-  // outputDataをパース
+  const toggleExpand = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !detailLoaded && !detailLoading) {
+      setDetailLoading(true);
+      fetch(`/api/jobs/${jobId}/records/${record.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setDetailOutputData(d?.outputData ?? null))
+        .catch(() => setDetailOutputData(null))
+        .finally(() => {
+          setDetailLoaded(true);
+          setDetailLoading(false);
+        });
+    }
+  };
+
+  // 取得済みの outputData をパース
   let outputFields: Record<string, unknown> | null = null;
   let platformData: Record<string, string> | null = null;
 
-  if (record.outputData) {
+  if (detailOutputData) {
     try {
-      outputFields = JSON.parse(record.outputData);
+      outputFields = JSON.parse(detailOutputData);
     } catch { /* ignore */ }
   }
 
@@ -196,15 +220,12 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
   }
 
   // この生成にかかった API 利用実費(円換算・概算)。導入後の実行分のみ記録されている
-  const apiCostYen =
-    outputFields && typeof outputFields.apiCostYen === "number"
-      ? (outputFields.apiCostYen as number)
-      : null;
+  const apiCostYen = record.apiCostYen;
 
   return (
     <div className={`rounded-lg border ${isTeamA ? "border-blue-200" : "border-orange-200"}`}>
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={toggleExpand}
         className={`w-full flex items-center gap-4 p-4 text-left hover:bg-gray-50/50 transition-colors ${
           isTeamA ? "bg-blue-50/30" : "bg-orange-50/30"
         }`}
@@ -227,9 +248,9 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
             >
               {isTeamA ? "新規作成" : "ブラッシュアップ"}
             </Badge>
-            {!isTeamA && improvements.length > 0 && (
+            {!isTeamA && record.improvementCount > 0 && (
               <Badge variant="outline" className="text-xs">
-                {improvements.length}箇所改善
+                {record.improvementCount}箇所改善
               </Badge>
             )}
             {thumbnailUrls.length > 0 && (
@@ -258,7 +279,14 @@ function RecordPreview({ record, index, total }: { record: JobRecord; index: num
         )}
       </button>
 
-      {expanded && (
+      {expanded && detailLoading && (
+        <div className="border-t px-4 py-8 bg-white flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+          読み込み中...
+        </div>
+      )}
+
+      {expanded && !detailLoading && (
         <div className="border-t px-4 py-4 space-y-4 bg-white">
           {/* サムネイルプレビュー */}
           {thumbnailUrls.length > 0 && (
@@ -346,29 +374,14 @@ function FieldList({ fields }: { fields: Record<string, string> }) {
   );
 }
 
-// 媒体タブ用: Team A の出力を媒体ごとに分解してレコードリストを作る
-function getPlatformRecords(records: JobRecord[], platform: string): { record: JobRecord; platformData: Record<string, string> | null }[] {
-  return records
-    .map((record) => {
-      if (!record.outputData) return { record, platformData: null };
-      try {
-        const parsed = JSON.parse(record.outputData);
-        if (record.type === "team-a") {
-          // Team A は all platform 出力 → 該当媒体を取り出す
-          const data = parsed[platform];
-          return { record, platformData: data || null };
-        } else {
-          // Team B は単一媒体
-          if (record.platform === platform) {
-            return { record, platformData: parsed.improvedPosting || null };
-          }
-          return null;
-        }
-      } catch {
-        return { record, platformData: null };
-      }
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null);
+// 媒体タブ用: その媒体のデータを含むレコードだけに絞る
+// (Team A はサーバ側で導出した platforms、Team B は record.platform で判定)
+function getPlatformRecords(records: JobRecord[], platform: string): JobRecord[] {
+  return records.filter((record) =>
+    record.type === "team-a"
+      ? record.platforms.includes(platform)
+      : record.platform === platform
+  );
 }
 
 const emptyMetricsForm = {
@@ -488,26 +501,15 @@ export default function JobDetailPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestOutputRef = useRef<AllPlatformPostings | null>(null);
 
-  // 最新の原稿をDBから取得
-  // Team A レコードを正として使う（全媒体のデータを持つため）
-  // Team B の改善結果は既にTeam Aレコードにマージ保存されている
+  // 最新の原稿(媒体ごとに最新の team-a レコードからマージ済み)はサーバ側で組み立てて返される
   const manuscriptLoadedRef = useRef(false);
   useEffect(() => {
     if (manuscriptLoadedRef.current && latestOutput) return;
-    if (!job?.records?.length) return;
+    if (!job?.latestManuscript) return;
 
-    const teamARecord = job.records.find((r) => r.type === "team-a");
-    if (!teamARecord?.outputData) return;
-
-    try {
-      const parsed = typeof teamARecord.outputData === "string"
-        ? JSON.parse(teamARecord.outputData)
-        : teamARecord.outputData;
-
-      setLatestOutput(parsed);
-      setLatestRecordId(teamARecord.id);
-      manuscriptLoadedRef.current = true;
-    } catch { /* ignore */ }
+    setLatestOutput(job.latestManuscript);
+    setLatestRecordId(job.latestRecordId ?? null);
+    manuscriptLoadedRef.current = true;
   }, [job]);
 
   // latestRecordId を ref でも保持（コールバック内で最新値を参照するため）
@@ -577,6 +579,17 @@ export default function JobDetailPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 求人ヘッダー */}
         <div className="mb-8">
+          <button
+            onClick={() =>
+              router.push(job.officeId ? `/jobs/offices/${job.officeId}` : "/jobs")
+            }
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {job.officeId
+              ? `${job.officeName || "事業所"}の求人一覧に戻る`
+              : "求人管理に戻る"}
+          </button>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-bold">{job.officeName}</h1>
             <Badge variant="outline">{job.employmentTypeName}</Badge>
@@ -947,9 +960,10 @@ export default function JobDetailPage() {
                         </p>
                       ) : (
                         <div className="space-y-3">
-                          {records.map(({ record }, index) => (
+                          {records.map((record, index) => (
                             <RecordPreview
                               key={record.id}
+                              jobId={jobId}
                               record={{
                                 ...record,
                                 // Team A の場合は platform を上書きして正しいデータを表示

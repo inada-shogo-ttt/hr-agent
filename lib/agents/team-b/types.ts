@@ -1,6 +1,6 @@
 // Team B エージェント I/O 型
 
-import { ExistingPostingFields, IndeedMetrics, AirWorkMetrics, ImprovementDiff, IssueSummary, BudgetRecommendation } from "@/types/team-b";
+import { ExistingPostingFields, IndeedMetrics, AirWorkMetrics, ImprovementDiff, IssueSummary, BudgetRecommendation, TeamBOutput } from "@/types/team-b";
 import { Platform } from "@/types/platform";
 import { PlatformThumbnails } from "@/lib/nanobanana";
 import { ReferencePostingData } from "@/types/reference";
@@ -20,6 +20,14 @@ export interface TeamBSSEEvent {
   message: string;
   data?: unknown;
   timestamp: string;
+}
+
+// workflow_complete イベントの data 形状。
+// サムネイルアップロードと履歴保存はサーバ側で完了済み(recordId は保存された JobRecord.id)
+export interface TeamBWorkflowCompleteData {
+  output: TeamBOutput;
+  recordId: string | null;
+  recordSaveError?: string;
 }
 
 // 統合テキスト改善 Agent（旧 Manager + MetricsAnalysis + ManuscriptAnalysis + TextImprovement）

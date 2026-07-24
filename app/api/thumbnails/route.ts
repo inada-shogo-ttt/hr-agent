@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth-guard";
+import { uploadThumbnailImages } from "@/lib/thumbnail-storage";
 
 export const runtime = "nodejs";
 
@@ -18,38 +18,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const urls: string[] = [];
-
-  for (let i = 0; i < images.length; i++) {
-    const base64 = images[i] as string;
-    if (!base64.startsWith("data:image/")) continue;
-
-    // data:image/png;base64,xxxxx → バイナリに変換
-    const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!matches) continue;
-
-    const ext = matches[1] === "jpeg" ? "jpg" : matches[1];
-    const buffer = Buffer.from(matches[2], "base64");
-    const path = `${jobId}/${platform}/${Date.now()}-${i}.${ext}`;
-
-    const { error } = await supabaseAdmin.storage
-      .from("thumbnails")
-      .upload(path, buffer, {
-        contentType: `image/${matches[1]}`,
-        upsert: true,
-      });
-
-    if (error) {
-      console.error(`Thumbnail upload failed: ${path}`, error.message);
-      continue;
-    }
-
-    const { data: publicUrl } = supabaseAdmin.storage
-      .from("thumbnails")
-      .getPublicUrl(path);
-
-    urls.push(publicUrl.publicUrl);
-  }
+  const urls = await uploadThumbnailImages(images, jobId, platform);
 
   return NextResponse.json({ urls });
 }

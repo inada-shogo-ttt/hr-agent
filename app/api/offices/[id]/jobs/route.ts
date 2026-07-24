@@ -39,7 +39,8 @@ export async function POST(
     officeId,
     jobTypeId,
     employmentTypeId,
-    orgId: auth.user.orgId,
+    // super_admin が他組織の事業所に求人を追加しても事業所の組織に帰属させる
+    orgId: office.orgId,
     status: "draft",
     createdBy: auth.user.id,
     createdAt: now,

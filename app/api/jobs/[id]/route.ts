@@ -30,16 +30,67 @@ export async function GET(
 
   const { data: records } = await supabase
     .from("JobRecord")
-    .select("*")
+    .select("id, jobId, type, platform, createdAt, thumbnailUrls, outputData")
     .eq("jobId", id)
     .order("createdAt", { ascending: false });
+
+  // 履歴一覧はメタ情報のみ返す(原稿全文は /records/[recordId] で展開時に遅延取得)。
+  // 一覧のバッジ表示・媒体タブ分類・最新原稿のマージに必要な値はここで導出する
+  const platformKeys = ["indeed", "airwork", "jobmedley", "hellowork"] as const;
+  const parsedRecords = (records || []).map((r) => {
+    let output: Record<string, unknown> | null = null;
+    if (r.outputData) {
+      try {
+        output = JSON.parse(r.outputData) as Record<string, unknown>;
+      } catch { /* 破損レコードはスキップ */ }
+    }
+    return { record: r, output };
+  });
+
+  const slimRecords = parsedRecords.map(({ record: r, output }) => {
+    const improvements = output?.improvements;
+    return {
+      id: r.id,
+      type: r.type,
+      platform: r.platform,
+      createdAt: r.createdAt,
+      thumbnailUrls: r.thumbnailUrls,
+      // team-a: outputData に含まれる媒体(タブ分類用)
+      platforms:
+        r.type === "team-a" && output ? platformKeys.filter((p) => output[p]) : [],
+      // team-b: 改善箇所数(バッジ用)
+      improvementCount: Array.isArray(improvements) ? improvements.length : 0,
+      apiCostYen: typeof output?.apiCostYen === "number" ? output.apiCostYen : null,
+    };
+  });
+
+  // 最新の原稿: 媒体を分けて生成すると各 team-a レコードには生成した媒体しか
+  // 入っていないため、媒体ごとに「その媒体を含む最新のレコード」からマージする
+  const teamAOutputs = parsedRecords.filter(
+    (p): p is { record: (typeof parsedRecords)[number]["record"]; output: Record<string, unknown> } =>
+      p.record.type === "team-a" && p.output !== null
+  );
+  let latestManuscript: Record<string, unknown> | null = null;
+  let latestRecordId: string | null = null;
+  if (teamAOutputs.length > 0) {
+    latestRecordId = teamAOutputs[0].record.id;
+    latestManuscript = { ...teamAOutputs[0].output };
+    for (const p of platformKeys) {
+      if (!latestManuscript[p]) {
+        const source = teamAOutputs.find((t) => t.output[p]);
+        if (source) latestManuscript[p] = source.output[p];
+      }
+    }
+  }
 
   return NextResponse.json({
     ...job,
     officeName: (job.Office as unknown as { name: string } | null)?.name || "",
     jobTypeName: (job.JobType as unknown as { name: string } | null)?.name || "",
     employmentTypeName: (job.EmploymentType as unknown as { name: string } | null)?.name || "",
-    records: records || [],
+    records: slimRecords,
+    latestManuscript,
+    latestRecordId,
   });
 }
 

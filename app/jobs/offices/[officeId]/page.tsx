@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, ChevronRight, Check } from "lucide-react";
+import { Plus, ChevronRight, Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 interface JobEntry {
@@ -71,6 +71,15 @@ export default function OfficeDetailPage() {
   }
 
   useEffect(() => { fetchOffice(); }, [officeId]);
+
+  // 一覧の「新規求人作成」からの遷移（?add=1）で追加ダイアログを自動で開く
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("add") === "1") {
+      openAddJobType();
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   async function fetchMasters() {
     const [jtRes, etRes] = await Promise.all([
@@ -157,6 +166,13 @@ export default function OfficeDetailPage() {
     <main className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* ヘッダー */}
+        <button
+          onClick={() => router.push("/jobs")}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          求人管理に戻る
+        </button>
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">{office.name}</h1>

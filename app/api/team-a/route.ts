@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { runManagerAgent } from "@/lib/agents/manager";
 import { runTrendResearchAgent } from "@/lib/agents/trend-research";
 import { runTrendAnalysisAgent } from "@/lib/agents/trend-analysis";
@@ -7,9 +7,16 @@ import { runThumbnailGenerationAgent } from "@/lib/agents/thumbnail-generation";
 import { runFactCheckAgent } from "@/lib/agents/fact-check";
 import { JobPostingInput } from "@/types/job-posting";
 import { AllPlatformPostings } from "@/types/platform";
-import { SSEEvent, AgentId } from "@/lib/agents/types";
+import { SSEEvent, AgentId, TeamAWorkflowCompleteData } from "@/lib/agents/types";
 import { ReferencePostingData } from "@/types/reference";
 import { supabase } from "@/lib/supabase";
+import { uploadThumbnailImages } from "@/lib/thumbnail-storage";
+import {
+  createWorkflowRun,
+  updateWorkflowRun,
+  touchWorkflowRun,
+  WorkflowAgentStatuses,
+} from "@/lib/workflow-run";
 import { getFormattedKnowledge } from "@/lib/shared-knowledge";
 import { getPlatformGuidelines } from "@/lib/platform-guidelines";
 import { getCachedTrendResearch, saveTrendResearch } from "@/lib/trend-cache";
@@ -33,7 +40,11 @@ function sendEvent(
   controller: ReadableStreamDefaultController,
   event: SSEEvent
 ): void {
-  controller.enqueue(new TextEncoder().encode(createSSEMessage(event)));
+  try {
+    controller.enqueue(new TextEncoder().encode(createSSEMessage(event)));
+  } catch {
+    // クライアント切断後は送信できない。ワークフローは継続し、結果は WorkflowRun に永続化する
+  }
 }
 
 function sseErrorResponse(message: string, code: string): Response {
@@ -71,21 +82,51 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const jobPostingInput = body as JobPostingInput;
   const usageJobId = typeof body.jobId === "string" ? body.jobId : null;
+  const runId = typeof body.runId === "string" ? body.runId : crypto.randomUUID();
+
+  // クライアントが切断してもワークフロー完了(結果の永続化)まで関数を生存させる
+  let resolveWorkflowDone!: () => void;
+  const workflowDone = new Promise<void>((resolve) => {
+    resolveWorkflowDone = resolve;
+  });
+  after(workflowDone);
 
   const stream = new ReadableStream({
     async start(controller) {
       const now = () => new Date().toISOString();
 
-      // Vercelプロキシの接続切断を防ぐため、15秒ごとにハートビートを送信
+      // 実行状態を永続化(接続断後の復旧用)。jobId が無い場合は追跡しない
+      const trackRun = !!usageJobId;
+      const agentStatuses: WorkflowAgentStatuses = {};
+      const persistStatuses = () => {
+        if (trackRun) void updateWorkflowRun(runId, { agentStatuses });
+      };
+      if (usageJobId) {
+        await createWorkflowRun({
+          id: runId,
+          jobId: usageJobId,
+          orgId: auth.user.orgId,
+          userId: auth.user.id,
+          kind: "team-a",
+        });
+      }
+
+      // Vercelプロキシの接続切断を防ぐため、15秒ごとにハートビートを送信。
+      // あわせて30秒ごとに WorkflowRun.updatedAt を更新(クライアントの生存判定用)
+      let heartbeatCount = 0;
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
         } catch {
           // ストリームが既に閉じている場合は無視
         }
+        heartbeatCount++;
+        if (trackRun && heartbeatCount % 2 === 0) void touchWorkflowRun(runId);
       }, 15000);
 
       const startAgent = (agentId: AgentId, message: string) => {
+        agentStatuses[agentId] = { status: "running", message };
+        persistStatuses();
         sendEvent(controller, {
           type: "agent_start",
           agentId,
@@ -94,7 +135,9 @@ export async function POST(request: NextRequest) {
         });
       };
 
+      // 進捗は高頻度のためDBには書かない(生存確認はハートビートで担保)
       const progressAgent = (agentId: AgentId, message: string, data?: unknown) => {
+        agentStatuses[agentId] = { status: "running", message };
         sendEvent(controller, {
           type: "agent_progress",
           agentId,
@@ -105,6 +148,8 @@ export async function POST(request: NextRequest) {
       };
 
       const completeAgent = (agentId: AgentId, message: string, data?: unknown) => {
+        agentStatuses[agentId] = { status: "completed", message };
+        persistStatuses();
         sendEvent(controller, {
           type: "agent_complete",
           agentId,
@@ -115,6 +160,8 @@ export async function POST(request: NextRequest) {
       };
 
       const errorAgent = (agentId: AgentId, message: string) => {
+        agentStatuses[agentId] = { status: "error", message };
+        persistStatuses();
         sendEvent(controller, {
           type: "agent_error",
           agentId,
@@ -440,6 +487,27 @@ export async function POST(request: NextRequest) {
           status: thumbnailOutput.generationStatus,
         });
 
+        // サムネイルをサーバ側で Storage にアップロード(ファクトチェックと並行)。
+        // SSE の完了イベントには base64 ではなく Storage URL のみを含める
+        const thumbnailUploadPromise = (async () => {
+          const uploaded: Record<"indeed" | "airwork" | "jobmedley", string[]> = {
+            indeed: [],
+            airwork: [],
+            jobmedley: [],
+          };
+          if (!usageJobId) return uploaded;
+          for (const p of ["indeed", "airwork", "jobmedley"] as const) {
+            if (platformThumbnails[p]?.length) {
+              try {
+                uploaded[p] = await uploadThumbnailImages(platformThumbnails[p], usageJobId, p);
+              } catch (e) {
+                console.warn(`[team-a] ${p} サムネイルアップロード失敗:`, e);
+              }
+            }
+          }
+          return uploaded;
+        })();
+
         // Step 7: Fact Check Agent
         startAgent("fact-check", "ファクトチェック・自動修正を開始します");
         const factCheckOutput = await runFactCheckAgent({
@@ -453,6 +521,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Step 8: Platform Formatter (final assembly)
+        const uploadedThumbnails = await thumbnailUploadPromise;
         const { common } = jobPostingInput;
         const finalManuscript = factCheckOutput.correctedManuscript;
 
@@ -514,7 +583,7 @@ export async function POST(request: NextRequest) {
             access: fmIndeed.access,
             benefits: fmIndeed.benefits,
             featureTags: idInput.featureTags,
-            thumbnailUrls: platformThumbnails.indeed,
+            thumbnailUrls: uploadedThumbnails.indeed,
             recruitmentBudget: idInput.recruitmentBudget?.toString(),
             charCounts: {
               jobTitle: countChars(fmIndeed.jobTitle),
@@ -551,7 +620,7 @@ export async function POST(request: NextRequest) {
             contactPhone: airInput.contactPhone || hm.phone,
             hpCatchphrase: airInput.hpCatchphrase || airInput.catchphrase,
             smokingPolicy: common.smokingPolicy,
-            thumbnailUrls: platformThumbnails.airwork,
+            thumbnailUrls: uploadedThumbnails.airwork,
             charCounts: {
               jobTitle: countChars(fmAirwork.jobTitle),
               jobDescription: countChars(fmAirwork.jobDescription),
@@ -578,7 +647,7 @@ export async function POST(request: NextRequest) {
             longTermHolidays: jmInput.longTermHolidays,
             staffVoice: jmInput.staffVoice,
             workplaceAtmosphere: jmInput.workplaceAtmosphere,
-            thumbnailUrls: platformThumbnails.jobmedley,
+            thumbnailUrls: uploadedThumbnails.jobmedley,
             charCounts: {
               appealTitle: countChars(fmJobmedley.appealTitle),
               appealText: countChars(fmJobmedley.appealText),
@@ -671,15 +740,58 @@ export async function POST(request: NextRequest) {
             },
           } } : {}),
           thumbnailUrls: [
-            ...platformThumbnails.indeed,
-            ...platformThumbnails.airwork,
-            ...platformThumbnails.jobmedley,
+            ...uploadedThumbnails.indeed,
+            ...uploadedThumbnails.airwork,
+            ...uploadedThumbnails.jobmedley,
           ],
-          platformThumbnails,
           visualStyle: thumbnailOutput.visualStyle,
           apiCostYen: getTrackedCostYen() ?? undefined,
           generatedAt: now(),
         };
+
+        // 履歴保存(サーバ側で保存するため、接続が切断されても結果が残る)
+        let recordId: string | null = null;
+        let recordSaveError: string | undefined;
+        if (usageJobId) {
+          const owned = await getOwnedJob(usageJobId, auth.user, "write");
+          if ("error" in owned) {
+            recordSaveError =
+              "原稿履歴の保存に失敗しました。ログイン中のアカウントとこの求人の組織が一致しているか確認してください。";
+          } else {
+            // 参考画像(base64)はDBに保存しない(レコード肥大化防止)
+            const inputForRecord = { ...(body as Record<string, unknown>) };
+            delete inputForRecord.thumbnailReference;
+            delete inputForRecord.jobId;
+            delete inputForRecord.runId;
+            const allThumbnailUrls = [
+              ...uploadedThumbnails.indeed,
+              ...uploadedThumbnails.airwork,
+              ...uploadedThumbnails.jobmedley,
+            ];
+            const { data: record, error: recordError } = await supabase
+              .from("JobRecord")
+              .insert({
+                id: crypto.randomUUID(),
+                jobId: usageJobId,
+                type: "team-a",
+                platform: "all",
+                inputData: JSON.stringify(inputForRecord),
+                outputData: JSON.stringify(finalOutput),
+                thumbnailUrls:
+                  allThumbnailUrls.length > 0 ? JSON.stringify(allThumbnailUrls) : null,
+                createdAt: now(),
+              })
+              .select("id")
+              .single();
+            if (recordError || !record) {
+              console.error("[team-a] 履歴保存に失敗:", recordError?.message);
+              recordSaveError =
+                "原稿履歴の保存に失敗しました。原稿は表示されますが履歴には残りません。";
+            } else {
+              recordId = record.id as string;
+            }
+          }
+        }
 
         // 実行成功時のみ課金記録(失敗しても原稿生成は完了扱い)
         try {
@@ -694,25 +806,50 @@ export async function POST(request: NextRequest) {
           console.error("[team-a] 課金記録に失敗:", e);
         }
 
+        // 実行状態を完了として永続化(接続断後の復旧ポーリング用)
+        if (trackRun) {
+          await updateWorkflowRun(runId, {
+            status: "completed",
+            agentStatuses,
+            outputData: finalOutput,
+            recordId: recordId ?? undefined,
+          });
+        }
+
         // ワークフロー完了
+        const completeData: TeamAWorkflowCompleteData = {
+          output: finalOutput,
+          recordId,
+          recordSaveError,
+        };
         sendEvent(controller, {
           type: "workflow_complete",
           agentId: "platform-formatter",
           message: `選択した${targetPlatforms.length}媒体の求人原稿が完成しました`,
-          data: finalOutput,
+          data: completeData,
           timestamp: now(),
         });
       } catch (error) {
         console.error("[team-a] Workflow error:", error);
+        const message =
+          error instanceof Error ? error.message : "ワークフロー実行中にエラーが発生しました";
+        if (trackRun) {
+          await updateWorkflowRun(runId, { status: "error", errorMessage: message });
+        }
         sendEvent(controller, {
           type: "workflow_error",
           agentId: "manager",
-          message: error instanceof Error ? error.message : "ワークフロー実行中にエラーが発生しました",
+          message,
           timestamp: now(),
         });
       } finally {
         clearInterval(heartbeat);
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // クライアント切断でストリームが既に閉じている場合は無視
+        }
+        resolveWorkflowDone();
       }
     },
   });

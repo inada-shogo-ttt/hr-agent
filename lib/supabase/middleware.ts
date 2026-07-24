@@ -29,9 +29,11 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getUser() は毎リクエストで Supabase Auth サーバーへの往復が発生するため、
+  // JWT をローカル検証する getClaims() を使う(Supabase 側で JWT Signing Keys を
+  // 有効にすると完全にローカル検証になる)。API ルート側の本検証は requireAuth が担う
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const pathname = request.nextUrl.pathname;
 

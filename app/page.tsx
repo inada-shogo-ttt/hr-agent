@@ -2,19 +2,14 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowRight,
-  BarChart3,
   Check,
-  Clock3,
   FilePenLine,
   Gauge,
   ImageIcon,
   LineChart,
-  Megaphone,
   Menu,
-  PenLine,
   Settings2,
   Sparkles,
-  WandSparkles,
 } from "lucide-react";
 import { Reveal } from "@/app/components/home/Reveal";
 
@@ -135,16 +130,16 @@ function Portrait({ index }: { index: number }) {
 
 export default function Home() {
   const pains = [
-    [Clock3, "同じ求人情報を何度も入力している", "共通の求人情報を一度入力し、選択した媒体向けの原稿をまとめて作成します。"],
-    [PenLine, "媒体ごとの書き分けが難しい", "媒体固有の項目や文字数を踏まえ、訴求ポイントを原稿へ落とし込みます。"],
-    [ImageIcon, "求人に合う画像も用意したい", "求人情報や参考画像をもとに、媒体別のサムネイルを生成します。"],
-    [BarChart3, "掲載後の改善方法が分からない", "掲載数値と過去原稿を参照し、課題・改善差分・次の施策を提示します。"],
+    ["/images/landing/icons/pain-repeated-entry.png", "同じ求人情報を何度も入力している", "共通の求人情報を一度入力し、選択した媒体向けの原稿をまとめて作成します。"],
+    ["/images/landing/icons/pain-media-rewrite.png", "媒体ごとの書き分けが難しい", "媒体固有の項目や文字数を踏まえ、訴求ポイントを原稿へ落とし込みます。"],
+    ["/images/landing/icons/pain-job-image.png", "求人に合う画像も用意したい", "求人情報や参考画像をもとに、媒体別のサムネイルを生成します。"],
+    ["/images/landing/icons/pain-improvement.png", "掲載後の改善方法が分からない", "掲載数値と過去原稿を参照し、課題・改善差分・次の施策を提示します。"],
   ] as const;
   const features = [
-    [Megaphone, "求人トレンドを調査", "職種・業種・地域の傾向を調べ、原稿の訴求設計に活用します。"],
-    [FilePenLine, "4媒体向けに原稿作成", "媒体ごとの項目・表現・文字数に合わせて、求人原稿を書き分けます。"],
-    [ImageIcon, "サムネイルも同時生成", "求人内容と参考画像をもとに、媒体別のビジュアルを作成します。"],
-    [BarChart3, "掲載結果から改善", "表示・クリック・応募などの数値と原稿を分析し、改善差分を提示します。"],
+    ["/images/landing/icons/feature-trends.png", "求人トレンドを調査", "職種・業種・地域の傾向を調べ、原稿の訴求設計に活用します。"],
+    ["/images/landing/icons/feature-four-media.png", "4媒体向けに原稿作成", "媒体ごとの項目・表現・文字数に合わせて、求人原稿を書き分けます。"],
+    ["/images/landing/icons/feature-thumbnail.png", "サムネイルも同時生成", "求人内容と参考画像をもとに、媒体別のビジュアルを作成します。"],
+    ["/images/landing/icons/feature-improve.png", "掲載結果から改善", "表示・クリック・応募などの数値と原稿を分析し、改善差分を提示します。"],
   ] as const;
   return (
     <main className="overflow-x-clip bg-white text-[#252a30]">
@@ -169,7 +164,7 @@ export default function Home() {
       </section>
 
       <section className="border-b border-[#eee9e7] bg-white py-10">
-        <div className="mx-auto max-w-[1120px] px-5"><h2 className="text-center text-[20px] font-bold">求人原稿の作成と改善を、ひとつの場所で</h2><div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{pains.map(([Icon,title,body]) => <article key={title} className="rounded-xl border border-[#e8e3e1] bg-white px-5 py-6 text-center shadow-[0_4px_12px_rgba(50,29,32,.045)]"><Icon className="mx-auto h-8 w-8 text-primary" strokeWidth={1.7}/><h3 className="mt-4 text-[14px] font-bold">{title}</h3><p className="mt-2 text-[12px] leading-6 text-gray-500">{body}</p></article>)}</div></div>
+        <div className="mx-auto max-w-[1120px] px-5"><h2 className="text-center text-[20px] font-bold">求人原稿の作成と改善を、ひとつの場所で</h2><div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{pains.map(([iconSrc,title,body]) => <article key={title} className="rounded-xl border border-[#e8e3e1] bg-white px-5 py-6 text-center shadow-[0_4px_12px_rgba(50,29,32,.045)]"><Image src={iconSrc} alt="" width={112} height={112} aria-hidden className="mx-auto h-14 w-14 object-contain" /><h3 className="mt-4 text-[14px] font-bold">{title}</h3><p className="mt-2 text-[12px] leading-6 text-gray-500">{body}</p></article>)}</div></div>
       </section>
 
       <section id="product" className="scroll-mt-8 py-16 sm:py-20">
@@ -182,18 +177,18 @@ export default function Home() {
       </section>
 
       <section id="flow" className="scroll-mt-8 border-y border-[#eee9e7] bg-[#fffdfc] py-8">
-        <div className="mx-auto grid max-w-[1160px] gap-8 px-5 lg:grid-cols-[230px_1fr]"><div className="self-center"><p className="text-[11px] font-bold tracking-[.12em] text-primary">HOW IT WORKS</p><h2 className="mt-3 text-[25px] font-black leading-9">求人作成から改善まで<br />3つのステップ</h2></div><div className="grid gap-5 sm:grid-cols-3">{[[WandSparkles,"求人情報を登録","テキスト、求人票、参考URLを入力。AI解析またはフォームで求人情報を整えます。"],[FilePenLine,"媒体別原稿を作成","出力する媒体を選ぶと、原稿と媒体別サムネイルをまとめて生成します。"],[LineChart,"掲載結果から改善","表示・クリック・応募などの数値と過去原稿をもとに、改善案を作成します。"]].map(([Icon,title,body],i) => { const I=Icon as typeof WandSparkles; return <article key={title as string} className="relative rounded-xl border border-[#e9e4e2] bg-white p-5"><span className="absolute left-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-primary text-[12px] font-bold text-white">0{i+1}</span><I className="mx-auto mt-4 h-12 w-12 text-[#ef9cab]" strokeWidth={1.2}/><h3 className="mt-4 text-[14px] font-bold">{title as string}</h3><p className="mt-2 text-[12px] leading-5 text-gray-500">{body as string}</p>{i<2&&<ArrowRight className="absolute -right-5 top-1/2 z-10 hidden h-4 w-4 text-primary sm:block" />}</article>})}</div></div>
+        <div className="mx-auto grid max-w-[1160px] gap-8 px-5 lg:grid-cols-[230px_1fr]"><div className="self-center"><p className="text-[11px] font-bold tracking-[.12em] text-primary">HOW IT WORKS</p><h2 className="mt-3 text-[25px] font-black leading-9">求人作成から改善まで<br />3つのステップ</h2></div><div className="grid gap-5 sm:grid-cols-3">{[["/images/landing/icons/flow-register.png","求人情報を登録","テキスト、求人票、参考URLを入力。AI解析またはフォームで求人情報を整えます。"],["/images/landing/icons/flow-write.png","媒体別原稿を作成","出力する媒体を選ぶと、原稿と媒体別サムネイルをまとめて生成します。"],["/images/landing/icons/flow-improve.png","掲載結果から改善","表示・クリック・応募などの数値と過去原稿をもとに、改善案を作成します。"]].map(([iconSrc,title,body],i) => <article key={title} className="relative rounded-xl border border-[#e9e4e2] bg-white p-5"><span className="absolute left-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-primary text-[12px] font-bold text-white">0{i+1}</span><Image src={iconSrc} alt="" width={144} height={144} aria-hidden className="mx-auto mt-1 h-[72px] w-[72px] object-contain" /><h3 className="mt-3 text-[14px] font-bold">{title}</h3><p className="mt-2 text-[12px] leading-5 text-gray-500">{body}</p>{i<2&&<ArrowRight className="absolute -right-5 top-1/2 z-10 hidden h-4 w-4 text-primary sm:block" />}</article>)}</div></div>
       </section>
 
       <section id="features" className="bg-[#282c30] py-8 text-white sm:py-10">
-        <div className="mx-auto grid max-w-[1160px] gap-8 px-5 lg:grid-cols-[230px_1fr]"><div className="self-center"><p className="text-[11px] font-bold tracking-[.15em] text-[#ff92a6]">FEATURES</p><h2 className="mt-3 text-[25px] font-black leading-9">原稿の品質と改善を<br />支える機能</h2><p className="mt-3 text-[12px] leading-6 text-gray-300">求人情報を原稿へ変換するだけでなく、調査・確認・画像作成・掲載後の改善まで支援します。</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{features.map(([Icon,title,body]) => <article key={title} className="rounded-xl border border-white/30 bg-white/[.02] px-4 py-6 text-center"><Icon className="mx-auto h-10 w-10 text-[#ff9cac]" strokeWidth={1.4}/><h3 className="mt-5 text-[14px] font-bold">{title}</h3><p className="mt-2 text-[12px] leading-6 text-gray-300">{body}</p></article>)}</div></div>
+        <div className="mx-auto grid max-w-[1160px] gap-8 px-5 lg:grid-cols-[230px_1fr]"><div className="self-center"><p className="text-[11px] font-bold tracking-[.15em] text-[#ff92a6]">FEATURES</p><h2 className="mt-3 text-[25px] font-black leading-9">原稿の品質と改善を<br />支える機能</h2><p className="mt-3 text-[12px] leading-6 text-gray-300">求人情報を原稿へ変換するだけでなく、調査・確認・画像作成・掲載後の改善まで支援します。</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{features.map(([iconSrc,title,body]) => <article key={title} className="rounded-xl border border-white/30 bg-white/[.02] px-4 py-6 text-center"><Image src={iconSrc} alt="" width={128} height={128} aria-hidden className="mx-auto h-16 w-16 object-contain" /><h3 className="mt-4 text-[14px] font-bold">{title}</h3><p className="mt-2 text-[12px] leading-6 text-gray-300">{body}</p></article>)}</div></div>
       </section>
 
       <section id="media" className="scroll-mt-8 py-10 sm:py-14"><div className="mx-auto max-w-[1160px] px-5"><p className="text-[11px] font-bold tracking-[.15em] text-primary">MEDIA</p><h2 className="mt-2 text-[24px] font-black">4つの求人媒体向けに出力</h2><p className="mt-2 text-[13px] text-gray-500">選択した媒体の項目構成・文字数・表現ルールを踏まえて、原稿を生成します。</p><div className="mt-7"><MediaLogos /></div></div></section>
 
       <section id="use-cases" className="scroll-mt-8 bg-[linear-gradient(105deg,#fff9f8,#fff)] py-12"><div className="mx-auto max-w-[1160px] px-5"><p className="text-[11px] font-bold tracking-[.15em] text-primary">USE CASES</p><h2 className="mt-2 text-[24px] font-black">採用業務での活用例</h2><div className="mt-7 grid gap-4 lg:grid-cols-3">{[["新しい求人を立ち上げるとき","求人票や会社情報から、必要項目を整理したい","テキスト・画像・PDF・参考URLをAIが解析し、求人情報の入力を支援します。"],["複数媒体へ掲載するとき","同じ求人を媒体ごとに書き分けたい","共通情報から、Indeed・AirWork・JobMedley・ハローワーク向けの原稿を生成します。"],["掲載後に見直すとき","数値を見ても、直すべき箇所が分からない","掲載数値と過去原稿を分析し、変更前後の差分と改善理由を確認できます。"]].map(([scene,title,body],i)=><article key={scene} className="flex min-h-[220px] overflow-hidden rounded-xl border border-[#e7e2df] bg-white shadow-[0_4px_12px_rgba(50,29,32,.04)]"><Portrait index={i}/><div className="p-5"><p className="text-[11px] font-bold text-primary">{scene}</p><h3 className="mt-4 text-[15px] font-bold leading-6">{title}</h3><p className="mt-3 text-[12px] leading-5 text-gray-500">{body}</p></div></article>)}</div></div></section>
 
-      <section className="bg-[#fffafa] pb-8"><div className="mx-auto max-w-[1160px] px-5"><div className="overflow-hidden rounded-xl bg-[linear-gradient(110deg,#ff657d,#ff224e)] text-white shadow-[0_12px_30px_rgba(255,56,92,.22)]"><div className="grid items-center gap-5 px-7 py-7 sm:grid-cols-[1.15fr_.85fr_.6fr]"><div><h2 className="text-[22px] font-bold">最初の求人原稿を作成する</h2><p className="mt-2 text-[13px] leading-6 text-white/85">ログイン後、事業所と求人を登録してください。<br />求人情報の入力から媒体別原稿の生成へ進めます。</p></div><PinkButton className="w-full bg-white text-primary shadow-none hover:bg-white">求人原稿を作成する</PinkButton><div className="hidden h-24 rounded-t-lg border-4 border-b-0 border-white/60 bg-white/95 p-2 sm:block"><div className="h-2 w-1/3 rounded bg-[#ffd8df]"/><div className="mt-2 h-2 w-4/5 rounded bg-gray-100"/><div className="mt-2 h-9 rounded bg-[#fff0f3]"/></div></div></div></div></section>
+      <section className="bg-[#fffafa] pb-8"><div className="mx-auto max-w-[1160px] px-5"><div className="overflow-hidden rounded-xl bg-[linear-gradient(110deg,#ff657d,#ff224e)] text-white shadow-[0_12px_30px_rgba(255,56,92,.22)]"><div className="grid items-center gap-5 px-7 py-7 sm:grid-cols-[1.15fr_.85fr_.6fr]"><div><h2 className="text-[22px] font-bold">最初の求人原稿を作成する</h2><p className="mt-2 text-[13px] leading-6 text-white/85">ログイン後、事業所と求人を登録してください。<br />求人情報の入力から媒体別原稿の生成へ進めます。</p></div><PinkButton className="w-full bg-[#252a30] text-white shadow-none hover:bg-[#353b42]">求人原稿を作成する</PinkButton><div className="hidden h-24 rounded-t-lg border-4 border-b-0 border-white/60 bg-white/95 p-2 sm:block"><div className="h-2 w-1/3 rounded bg-[#ffd8df]"/><div className="mt-2 h-2 w-4/5 rounded bg-gray-100"/><div className="mt-2 h-9 rounded bg-[#fff0f3]"/></div></div></div></div></section>
 
       <footer className="bg-white py-9"><div className="mx-auto grid max-w-[1160px] gap-8 px-5 text-[12px] text-gray-500 sm:grid-cols-[1.2fr_2fr_.4fr]"><div><BrandMark /><p className="mt-3 leading-6">求人情報の入力から媒体別原稿・サムネイルの作成、<br />掲載結果を使った改善まで支援します。</p></div><div className="grid grid-cols-3 gap-4 leading-7"><div><b className="text-gray-800">求人作成</b><p>AIかんたん入力<br/>媒体別原稿<br/>サムネイル生成<br/>作成履歴</p></div><div><b className="text-gray-800">ブラッシュアップ</b><p>掲載数値の分析<br/>改善差分<br/>課題サマリー<br/>予算提案（Indeed）</p></div><div><b className="text-gray-800">対応媒体</b><p>Indeed<br/>AirWork<br/>JobMedley<br/>ハローワーク</p></div></div><p className="self-end text-right">© 2026 HR Agent Inc.</p></div></footer>
     </main>

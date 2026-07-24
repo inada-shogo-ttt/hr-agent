@@ -8,8 +8,10 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle, Circle, Clock, Loader2, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { LiveWritingDesk, DeskStep, FeedItem } from "@/app/components/workflow/LiveWritingDesk";
-import { TeamBSSEEvent, TeamBAgentId } from "@/lib/agents/team-b/types";
+import { TeamBSSEEvent, TeamBAgentId, TeamBWorkflowCompleteData } from "@/lib/agents/team-b/types";
+import { addDismissedRun } from "@/lib/workflow-run-client";
 import { TeamBOutput } from "@/types/team-b";
 import { AgentStatus } from "@/lib/agents/types";
 
@@ -123,30 +125,58 @@ export default function JobTeamBProgressPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("AIエージェントを起動中...");
+  const [recovering, setRecovering] = useState(false);
   const hasStarted = useRef(false);
+  const runIdRef = useRef<string | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollFailures = useRef(0);
+  const finishedRef = useRef(false);
 
-  // 離脱防止: 実行中はページを離れる前に警告
+  // 実行IDをタブ内に保持し、リロード・接続断後に同じ実行へ復帰できるようにする
+  const runKey = `teamBRunId:${jobId}`;
+
+  // ページ離脱後は画面更新・遷移を行わない(改善処理はサーバーで継続し、通知はウィジェットが担う)
+  const activeRef = useRef(true);
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!isComplete && !error) {
-        e.preventDefault();
-      }
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
     };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isComplete, error]);
+  }, []);
 
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
     const input = sessionStorage.getItem("teamBInput");
+    const existingRunId = sessionStorage.getItem(runKey);
+
+    // 前回の実行が残っている場合(リロード・タブ復帰)は再実行せず状態を確認する
+    if (existingRunId) {
+      runIdRef.current = existingRunId;
+      setRecovering(true);
+      setStatusMessage("前回の実行状況を確認しています...");
+      watchRun(existingRunId, "TIMEOUT", () => {
+        // 実行が記録されていなければ新規開始
+        sessionStorage.removeItem(runKey);
+        setRecovering(false);
+        if (input) startWithHistory(input);
+        else router.replace(`/jobs/${jobId}/rewrite-posting`);
+      });
+      return;
+    }
+
     if (!input) {
       router.replace(`/jobs/${jobId}/rewrite-posting`);
       return;
     }
 
-    // 過去データを取得してから実行
+    startWithHistory(input);
+  }, [router, jobId]);
+
+  // 過去データを取得してから実行
+  const startWithHistory = (input: string) => {
     fetch(`/api/jobs/${jobId}/history-context`)
       .then((r) => r.json())
       .then((historyData) => {
@@ -154,25 +184,152 @@ export default function JobTeamBProgressPage() {
         startWorkflow({ ...teamBInput, jobId, historyContext: historyData.history });
       })
       .catch(() => {
-        startWorkflow(JSON.parse(input));
+        startWorkflow({ ...JSON.parse(input), jobId });
       });
-  }, [router, jobId]);
+  };
 
-  const startWorkflow = (teamBInput: unknown) => {
+  const computeProgress = (
+    statuses: Record<string, { status: AgentStatus; message?: string }>
+  ) => {
+    const completedWeight = Object.entries(AGENT_WEIGHTS)
+      .filter(([id]) => statuses[id]?.status === "completed")
+      .reduce((sum, [, w]) => sum + w, 0);
+    const totalWeight = Object.values(AGENT_WEIGHTS).reduce((s, w) => s + w, 0);
+    return Math.round((completedWeight / totalWeight) * 100);
+  };
+
+  // 完了確定: 結果を保存して出力ページへ(SSE経由・復旧ポーリング経由の両方から呼ばれる)
+  // サムネイルアップロードと履歴保存はサーバ側で完了済み
+  const finalizeComplete = (
+    output: TeamBOutput | null,
+    recordId: string | null,
+    recordSaveError?: string
+  ) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+
+    // 結果はページ離脱後でも保存しておく(出力ページ・ウィジェットが利用)
+    if (output) sessionStorage.setItem("teamBOutput", JSON.stringify(output));
+    else sessionStorage.removeItem("teamBOutput");
+    if (recordId) sessionStorage.setItem("teamBRecordId", recordId);
+    else sessionStorage.removeItem("teamBRecordId");
+
+    // ページ離脱後の完了はウィジェットが通知・誘導する(強制遷移しない)
+    if (!activeRef.current) return;
+
+    // runId は保持したまま「確認済み」にする。ページ再訪時は完了済み実行として
+    // 出力ページへ誘導され、再実行(二重課金)を防ぐ。ウィジェットにも重複表示しない
+    if (runIdRef.current) addDismissedRun(runIdRef.current);
+
+    setProgress(100);
+    setError(null);
+    setRecovering(false);
+    setIsComplete(true);
+    setStatusMessage("完成！原稿改善が完了しました");
+    if (recordSaveError) toast.error(recordSaveError);
+
+    setTimeout(() => {
+      router.push(`/jobs/${jobId}/rewrite-posting/output`);
+    }, 1500);
+  };
+
+  const finalizeError = (message: string) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+    // ページ離脱後のエラーはウィジェットが表示する
+    if (!activeRef.current) return;
+    if (runIdRef.current) addDismissedRun(runIdRef.current);
+    setRecovering(false);
+    setError(message);
+  };
+
+  // サーバ側の実行状態をポーリングし、完了/エラー/停止を判定する
+  // fallbackError: 実行を追跡できない場合に表示するエラー
+  const watchRun = async (
+    runId: string,
+    fallbackError: string,
+    onNotFound?: () => void
+  ) => {
+    if (finishedRef.current || !activeRef.current) return;
+    try {
+      const res = await fetch(`/api/workflow-runs/${runId}`);
+      if (res.status === 404) {
+        if (onNotFound) onNotFound();
+        else finalizeError(fallbackError);
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const run = (await res.json()) as {
+        status: "running" | "completed" | "error";
+        stale: boolean;
+        agentStatuses: Record<string, { status: AgentStatus; message?: string }> | null;
+        outputData: TeamBOutput | null;
+        recordId: string | null;
+        errorMessage: string | null;
+      };
+      pollFailures.current = 0;
+
+      if (run.status === "completed") {
+        finalizeComplete(run.outputData, run.recordId);
+        return;
+      }
+      if (run.status === "error") {
+        finalizeError(run.errorMessage || "ワークフロー実行中にエラーが発生しました");
+        return;
+      }
+      if (run.stale) {
+        // サーバ側の実行が途絶えている
+        finalizeError(fallbackError);
+        return;
+      }
+      // 実行中: 進捗を反映して継続
+      if (run.agentStatuses) {
+        setAgentStatuses(run.agentStatuses);
+        setProgress(computeProgress(run.agentStatuses));
+      }
+      setStatusMessage("改善処理はサーバー側で継続しています。完了までお待ちください...");
+    } catch {
+      pollFailures.current++;
+      if (pollFailures.current >= 24) {
+        // 約2分間状態確認に失敗し続けたら諦める
+        finalizeError(fallbackError);
+        return;
+      }
+    }
+    // 実行が見つかった後の 404 は新規開始せずエラー扱いにする(onNotFound は初回のみ)
+    pollTimer.current = setTimeout(() => watchRun(runId, fallbackError), 5000);
+  };
+
+  // 接続断からの復旧: サーバ側では改善処理が継続しているため、ポーリングに切り替える
+  const beginRecovery = (originalError: string) => {
+    if (finishedRef.current || !activeRef.current) return;
+    const runId = runIdRef.current;
+    if (!runId) {
+      finalizeError(originalError);
+      return;
+    }
+    setRecovering(true);
+    setStatusMessage("接続が切断されました。サーバー側の実行状況を確認しています...");
+    watchRun(runId, originalError);
+  };
+
+  const startWorkflow = (teamBInput: Record<string, unknown>) => {
+    const runId = crypto.randomUUID();
+    runIdRef.current = runId;
+    sessionStorage.setItem(runKey, runId);
+
     const worker = new Worker("/sse-worker.js");
-    worker.postMessage({ url: "/api/team-b", body: teamBInput });
+    worker.postMessage({ url: "/api/team-b", body: { ...teamBInput, runId } });
 
-    worker.onmessage = async (e) => {
+    worker.onmessage = (e) => {
       const msg = e.data;
       if (msg.type === "__worker_event") {
         handleEvent(msg.event as TeamBSSEEvent);
       } else if (msg.type === "__worker_error") {
         console.error("Workflow error:", msg.error);
-        if (msg.error === "TIMEOUT") {
-          setError("TIMEOUT");
-        } else {
-          setError(msg.error);
-        }
+        beginRecovery(msg.error);
         worker.terminate();
       } else if (msg.type === "__worker_done") {
         worker.terminate();
@@ -181,7 +338,7 @@ export default function JobTeamBProgressPage() {
 
     worker.onerror = (e) => {
       console.error("Worker error:", e);
-      setError("ワーカーの実行中にエラーが発生しました");
+      beginRecovery("ワーカーの実行中にエラーが発生しました");
       worker.terminate();
     };
   };
@@ -189,7 +346,7 @@ export default function JobTeamBProgressPage() {
   // ライブプレビュー用フィード（SSEイベントの実データから導出）
   const feed = useMemo(() => buildTeamBFeed(events), [events]);
 
-  const handleEvent = async (event: TeamBSSEEvent) => {
+  const handleEvent = (event: TeamBSSEEvent) => {
     setEvents((prev) => [...prev, event]);
 
     if (event.type === "agent_start") {
@@ -201,11 +358,7 @@ export default function JobTeamBProgressPage() {
     } else if (event.type === "agent_complete") {
       setAgentStatuses((prev) => {
         const next = { ...prev, [event.agentId]: { status: "completed" as const, message: event.message } };
-        const completedWeight = Object.entries(AGENT_WEIGHTS)
-          .filter(([id]) => next[id]?.status === "completed")
-          .reduce((sum, [, w]) => sum + w, 0);
-        const totalWeight = Object.values(AGENT_WEIGHTS).reduce((s, w) => s + w, 0);
-        setProgress(Math.round((completedWeight / totalWeight) * 100));
+        setProgress(computeProgress(next));
         return next;
       });
     } else if (event.type === "agent_error") {
@@ -215,98 +368,10 @@ export default function JobTeamBProgressPage() {
       }));
       setError(event.message);
     } else if (event.type === "workflow_complete") {
-      setProgress(100);
-      setStatusMessage("完成！原稿改善が完了しました");
-      setIsComplete(true);
-
-      if (event.data) {
-        const output = event.data as TeamBOutput;
-        // サムネイルを Supabase Storage にアップロード
-        setStatusMessage("サムネイルをアップロード中...");
-        const uploadedThumbnails: string[] = [];
-        const pt = output.platformThumbnails;
-        const platformsToUpload = [
-          { key: "indeed", urls: pt?.indeed },
-          { key: "airwork", urls: pt?.airwork },
-          { key: "jobmedley", urls: pt?.jobmedley },
-        ];
-
-        for (const { key, urls } of platformsToUpload) {
-          if (urls?.length) {
-            try {
-              const uploadRes = await fetch("/api/thumbnails", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ images: urls, jobId, platform: `teamB-${key}` }),
-              });
-              if (uploadRes.ok) {
-                const { urls: uploaded } = await uploadRes.json();
-                uploadedThumbnails.push(...uploaded);
-              }
-            } catch { /* ignore */ }
-          }
-        }
-
-        // フォールバック: platformThumbnails がない場合
-        if (!pt && output.thumbnailUrls?.length > 0) {
-          try {
-            const uploadRes = await fetch("/api/thumbnails", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ images: output.thumbnailUrls, jobId, platform: `teamB-${output.platform}` }),
-            });
-            if (uploadRes.ok) {
-              const { urls: uploaded } = await uploadRes.json();
-              uploadedThumbnails.push(...uploaded);
-            }
-          } catch { /* ignore */ }
-        }
-
-        const outputWithStorageUrls = {
-          ...output,
-          thumbnailUrls: uploadedThumbnails,
-          platformThumbnails: undefined,
-        };
-
-        sessionStorage.setItem("teamBOutput", JSON.stringify(outputWithStorageUrls));
-
-        // DB に履歴保存
-        setStatusMessage("履歴を保存中...");
-        let inputData = null;
-        try {
-          const inputStr = sessionStorage.getItem("teamBInput");
-          if (inputStr) inputData = JSON.parse(inputStr);
-        } catch { /* ignore */ }
-
-        try {
-          const saveRes = await fetch(`/api/jobs/${jobId}/records`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: "team-b",
-              platform: output.platform,
-              inputData: inputData?.existingPosting || null,
-              outputData: outputWithStorageUrls,
-              metricsData: inputData?.metrics || null,
-              thumbnailUrls: uploadedThumbnails.length > 0 ? uploadedThumbnails : null,
-            }),
-          });
-          if (saveRes.ok) {
-            const record = await saveRes.json();
-            sessionStorage.setItem("teamBRecordId", record.id);
-          } else {
-            console.error(`Failed to save record (${saveRes.status}):`, await saveRes.text());
-          }
-        } catch (err) {
-          console.error("Failed to save record:", err);
-        }
-      }
-
-      setTimeout(() => {
-        router.push(`/jobs/${jobId}/rewrite-posting/output`);
-      }, 1500);
+      const data = (event.data ?? {}) as TeamBWorkflowCompleteData;
+      finalizeComplete(data.output ?? null, data.recordId ?? null, data.recordSaveError);
     } else if (event.type === "workflow_error") {
-      setError(event.message);
+      finalizeError(event.message);
     }
   };
 
@@ -319,15 +384,34 @@ export default function JobTeamBProgressPage() {
         </p>
         {!isComplete && !error && (
           <div className="mb-6 space-y-2">
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>生成が完了するまで、このページを離れないでください。離れると結果が失われます。</span>
-            </div>
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
               <Clock className="w-4 h-4 shrink-0" />
-              <span>処理中はPCがスリープしないようにしてください。スリープすると接続が切断される場合があります。</span>
+              <span>改善には数分かかります。このページを開いたままお待ちください。</span>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-700 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>接続が切れたりPCがスリープしても改善処理はサーバー側で継続され、完了した結果は履歴に保存されます。このページに戻れば途中から再開できます。</span>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/jobs/${jobId}`)}
+              >
+                他の作業を続ける（改善はバックグラウンドで継続）
+              </Button>
             </div>
           </div>
+        )}
+
+        {recovering && !isComplete && !error && (
+          <Card className="mb-6 border-blue-200 bg-blue-50">
+            <CardContent className="pt-6">
+              <p className="text-blue-800 text-sm">
+                サーバーとの接続が切断されましたが、改善処理はサーバー側で継続しています。実行状況を確認しています...
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         {/* 原稿ライブプレビュー */}
@@ -358,7 +442,7 @@ export default function JobTeamBProgressPage() {
                 <div>
                   <p className="font-medium text-amber-800 mb-1">タイムアウトしました</p>
                   <p className="text-sm text-amber-700">
-                    処理に時間がかかりすぎたため、サーバーとの接続が切断されました。お手数ですが、もう一度やり直してください。
+                    サーバー側の処理が完了しないまま停止した可能性があります。お手数ですが、もう一度やり直してください。改善結果が生成済みの場合は求人詳細の履歴に保存されています。
                   </p>
                   <Link href={`/jobs/${jobId}/rewrite-posting`} className="mt-3 inline-block">
                     <Button variant="outline" size="sm">もう一度やり直す</Button>

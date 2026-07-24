@@ -4,6 +4,33 @@ import { requireAuth } from "@/lib/auth-guard";
 import { getOwnedJob } from "@/lib/org-scope";
 import { applyTeamBResultToManuscript } from "@/lib/job-records";
 
+// GET /api/jobs/[id]/records/[recordId] — 履歴1件の全文(一覧展開時の遅延取得用)
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; recordId: string }> }
+) {
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
+
+  const { id, recordId } = await params;
+
+  const owned = await getOwnedJob(id, auth.user, "read");
+  if ("error" in owned) return owned.error;
+
+  const { data: record, error } = await supabaseAdmin
+    .from("JobRecord")
+    .select("*")
+    .eq("id", recordId)
+    .eq("jobId", id)
+    .single();
+
+  if (error || !record) {
+    return NextResponse.json({ error: "履歴が見つかりません" }, { status: 404 });
+  }
+
+  return NextResponse.json(record);
+}
+
 // PATCH /api/jobs/[id]/records/[recordId] — 原稿更新
 export async function PATCH(
   request: NextRequest,

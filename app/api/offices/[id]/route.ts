@@ -34,9 +34,12 @@ export async function GET(
     .eq("officeId", id)
     .order("createdAt", { ascending: true });
 
+  // 閲覧権限のある求人のみ返す（orgId 不整合データの露出防止）
+  const visibleJobs = (jobs || []).filter((job) => canReadOrg(auth.user, job.orgId));
+
   // 最新レコードを各Jobに紐付け
   const jobsWithRecords = await Promise.all(
-    (jobs || []).map(async (job) => {
+    visibleJobs.map(async (job) => {
       const { data: records } = await supabaseAdmin
         .from("JobRecord")
         .select("type, platform, createdAt")

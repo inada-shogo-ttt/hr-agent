@@ -16,17 +16,26 @@ export async function applyTeamBResultToManuscript(
       .eq("jobId", jobId)
       .eq("type", "team-a")
       .order("createdAt", { ascending: false })
-      .limit(1);
+      .limit(20);
 
-    const teamARecord = records?.[0];
-    if (!teamARecord?.outputData) return;
-
-    let output: Record<string, unknown>;
-    try {
-      output = JSON.parse(teamARecord.outputData) as Record<string, unknown>;
-    } catch {
-      return;
+    // 媒体を分けて生成した場合、最新レコードに当該媒体が無いことがあるため、
+    // その媒体のデータを含む最新の team-a レコードへ反映する
+    let recordId: string | null = null;
+    let output: Record<string, unknown> | null = null;
+    for (const r of records || []) {
+      if (!r.outputData) continue;
+      try {
+        const parsed = JSON.parse(r.outputData) as Record<string, unknown>;
+        if (parsed[platform]) {
+          recordId = r.id;
+          output = parsed;
+          break;
+        }
+      } catch {
+        // 破損レコードはスキップ
+      }
     }
+    if (!recordId || !output) return;
 
     const section = output[platform] as Record<string, unknown> | undefined;
     if (!section) return;
@@ -70,7 +79,7 @@ export async function applyTeamBResultToManuscript(
     await supabaseAdmin
       .from("JobRecord")
       .update({ outputData: JSON.stringify(output) })
-      .eq("id", teamARecord.id);
+      .eq("id", recordId);
   } catch (e) {
     console.warn("[job-records] Team B 改善の原稿反映に失敗:", e);
   }

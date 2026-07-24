@@ -29,6 +29,14 @@ export interface SSEEvent {
   timestamp: string;
 }
 
+// workflow_complete イベントの data 形状。
+// サムネイルアップロードと履歴保存はサーバ側で完了済み(recordId は保存された JobRecord.id)
+export interface TeamAWorkflowCompleteData {
+  output: AllPlatformPostings;
+  recordId: string | null;
+  recordSaveError?: string;
+}
+
 // ワークフロー進捗
 export interface WorkflowProgress {
   agents: Record<AgentId, {

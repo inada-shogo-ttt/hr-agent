@@ -1,33 +1,45 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { CommonJobInfo } from "@/types/job-posting";
-import {
-  Upload,
-  FileText,
-  Sparkles,
-  X,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Link2,
-  Plus,
-} from "lucide-react";
+import { Upload, FileText, X, Link2, Plus } from "lucide-react";
 
-interface UploadedFile {
+export interface UploadedFile {
   name: string;
   type: "text" | "image" | "pdf";
   content: string; // base64 for images/PDFs, raw text for text files
   mimeType?: string;
 }
 
-interface AIInputModeProps {
-  onParsed: (data: Partial<CommonJobInfo>) => void;
+export type AIInputMethod = "text" | "url" | "file";
+
+export interface AIInputValue {
+  text: string;
+  urlInput: string;
+  urls: string[];
+  files: UploadedFile[];
+}
+
+export const EMPTY_AI_INPUT: AIInputValue = {
+  text: "",
+  urlInput: "",
+  urls: [],
+  files: [],
+};
+
+export function parseValidUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  try {
+    new URL(trimmed);
+    return trimmed;
+  } catch {
+    return null;
+  }
 }
 
 const ACCEPTED_TYPES = {
@@ -47,21 +59,23 @@ const PLACEHOLDER_TEXT = `例えばこんな風に入力できます：
 正社員で月給25万〜30万円、9時〜18時勤務。
 介護福祉士の資格がある方歓迎。未経験でもOKです。
 週休2日制で年間休日120日。社会保険完備。
-駅から徒歩5分で通勤便利です。
+駅から徒歩5分で通勤便利です。`;
 
----
-または、既存の求人票のスクリーンショットや
-テキストファイルをドラッグ&ドロップしてください。`;
+interface AIInputFieldsProps {
+  method: AIInputMethod;
+  value: AIInputValue;
+  onChange: (value: AIInputValue) => void;
+  disabled?: boolean;
+}
 
-export function AIInputMode({ onParsed }: AIInputModeProps) {
-  const [text, setText] = useState("");
-  const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [urls, setUrls] = useState<string[]>([]);
-  const [urlInput, setUrlInput] = useState("");
-  const [isParsing, setIsParsing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function AIInputFields({
+  method,
+  value,
+  onChange,
+  disabled,
+}: AIInputFieldsProps) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   const processFile = useCallback(async (file: File): Promise<UploadedFile | null> => {
     const mimeType = file.type;
@@ -96,126 +110,80 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
         const processed = await processFile(file);
         if (processed) newFiles.push(processed);
       }
-      setFiles((prev) => [...prev, ...newFiles]);
+      onChange({ ...value, files: [...value.files, ...newFiles] });
     },
-    [processFile]
+    [processFile, value, onChange]
   );
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      if (e.dataTransfer.files.length > 0) {
-        handleFiles(e.dataTransfer.files);
-      }
-    },
-    [handleFiles]
-  );
-
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const addUrl = () => {
-    const trimmed = urlInput.trim();
-    if (!trimmed) return;
-    try {
-      new URL(trimmed); // validate
-      setUrls((prev) => [...prev, trimmed]);
-      setUrlInput("");
-    } catch {
-      setError("有効なURLを入力してください（https://...）");
-    }
-  };
-
-  const removeUrl = (index: number) => {
-    setUrls((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleParse = async () => {
-    if (!text.trim() && files.length === 0 && urls.length === 0) return;
-    setIsParsing(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/parse-job-input", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: text.trim() || undefined,
-          fileContents: files.length > 0 ? files.map((f) => ({
-            type: f.type,
-            content: f.content,
-            mimeType: f.mimeType,
-            name: f.name,
-          })) : undefined,
-          urls: urls.length > 0 ? urls : undefined,
-        }),
+  const addUrl = (input: string) => {
+    if (!input.trim()) return;
+    const valid = parseValidUrl(input);
+    if (valid) {
+      onChange({
+        ...value,
+        urls: value.urls.includes(valid) ? value.urls : [...value.urls, valid],
+        urlInput: "",
       });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "解析に失敗しました");
-      }
-
-      const data = await res.json();
-      onParsed(data.common);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "解析中にエラーが発生しました");
-    } finally {
-      setIsParsing(false);
+      setUrlError(null);
+    } else {
+      setUrlError("有効なURLを入力してください（https://...）");
     }
   };
 
-  const hasInput = text.trim().length > 0 || files.length > 0 || urls.length > 0;
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-gradient-to-r from-violet-50 to-blue-50 border border-violet-200 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Sparkles className="w-5 h-5 text-violet-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-violet-800">AIかんたん入力モード</p>
-            <p className="text-sm text-violet-600 mt-1">
-              求人情報をテキストで自由に入力、参考URLを添付、または既存の求人票（画像・テキスト）をアップロードしてください。
-              AIが自動で項目を解析・分類します。
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Text input area */}
+  if (method === "text") {
+    return (
       <div className="space-y-2">
         <Label htmlFor="ai-input" className="text-base font-medium">
           求人情報を入力
         </Label>
         <Textarea
           id="ai-input"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          value={value.text}
+          onChange={(e) => onChange({ ...value, text: e.target.value })}
           placeholder={PLACEHOLDER_TEXT}
           rows={10}
           className="text-base leading-relaxed resize-y"
-          disabled={isParsing}
+          disabled={disabled}
         />
+        <p className="text-xs text-muted-foreground">
+          文体は自由です。AIが内容を読み取って各項目に自動で整理します
+        </p>
       </div>
+    );
+  }
 
-      {/* URL input */}
+  if (method === "url") {
+    return (
       <div className="space-y-2">
         <Label className="text-base font-medium flex items-center gap-2">
           <Link2 className="w-4 h-4" />
-          参考URLを添付
+          求人ページのURL
         </Label>
         <div className="flex gap-2">
           <Input
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
+            value={value.urlInput}
+            onChange={(e) => onChange({ ...value, urlInput: e.target.value })}
             placeholder="https://example.com/job-posting"
-            disabled={isParsing}
+            disabled={disabled}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                addUrl();
+                addUrl(value.urlInput);
+              }
+            }}
+            onPaste={(e) => {
+              // 有効なURLの貼り付けは自動でリストに追加する
+              const pasted = parseValidUrl(e.clipboardData.getData("text"));
+              if (pasted) {
+                e.preventDefault();
+                onChange({
+                  ...value,
+                  urls: value.urls.includes(pasted)
+                    ? value.urls
+                    : [...value.urls, pasted],
+                  urlInput: "",
+                });
+                setUrlError(null);
               }
             }}
           />
@@ -223,8 +191,8 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={addUrl}
-            disabled={isParsing || !urlInput.trim()}
+            onClick={() => addUrl(value.urlInput)}
+            disabled={disabled || !value.urlInput.trim()}
             className="shrink-0 px-3"
           >
             <Plus className="w-4 h-4 mr-1" />
@@ -232,11 +200,12 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          求人サイトや会社HPのURLを入力すると、AIがページ内容を読み取って解析します
+          貼り付けるだけでOK。求人サイトや会社HPのURLからAIがページ内容を読み取ります（複数可）
         </p>
-        {urls.length > 0 && (
+        {urlError && <p className="text-xs text-red-500">{urlError}</p>}
+        {value.urls.length > 0 && (
           <div className="space-y-1.5 mt-2">
-            {urls.map((url, i) => (
+            {value.urls.map((url, i) => (
               <div
                 key={i}
                 className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5"
@@ -245,9 +214,14 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
                 <span className="truncate text-blue-700 flex-1">{url}</span>
                 <button
                   type="button"
-                  onClick={() => removeUrl(i)}
+                  onClick={() =>
+                    onChange({
+                      ...value,
+                      urls: value.urls.filter((_, idx) => idx !== i),
+                    })
+                  }
                   className="p-0.5 text-gray-400 hover:text-red-500"
-                  disabled={isParsing}
+                  disabled={disabled}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -256,8 +230,12 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
           </div>
         )}
       </div>
+    );
+  }
 
-      {/* File upload area */}
+  // method === "file"
+  return (
+    <div className="space-y-4">
       <div
         className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
           isDragOver
@@ -269,7 +247,13 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
           setIsDragOver(true);
         }}
         onDragLeave={() => setIsDragOver(false)}
-        onDrop={handleDrop}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          if (e.dataTransfer.files.length > 0) {
+            handleFiles(e.dataTransfer.files);
+          }
+        }}
       >
         <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
         <p className="text-sm text-muted-foreground mb-1">
@@ -279,7 +263,6 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
           PDF、画像（JPG, PNG）、テキストファイル（TXT, CSV）に対応（10MBまで）
         </p>
         <Input
-          ref={fileInputRef}
           type="file"
           className="absolute inset-0 opacity-0 cursor-pointer"
           accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.txt,.csv"
@@ -288,14 +271,13 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
             if (e.target.files) handleFiles(e.target.files);
             e.target.value = "";
           }}
-          disabled={isParsing}
+          disabled={disabled}
         />
       </div>
 
-      {/* Uploaded files list */}
-      {files.length > 0 && (
+      {value.files.length > 0 && (
         <div className="space-y-2">
-          {files.map((file, i) => (
+          {value.files.map((file, i) => (
             <Card key={i}>
               <CardContent className="py-2 px-3">
                 <div className="flex items-center justify-between">
@@ -308,9 +290,14 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => removeFile(i)}
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        files: value.files.filter((_, idx) => idx !== i),
+                      })
+                    }
                     className="p-1 text-gray-400 hover:text-red-500"
-                    disabled={isParsing}
+                    disabled={disabled}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -320,42 +307,6 @@ export function AIInputMode({ onParsed }: AIInputModeProps) {
           ))}
         </div>
       )}
-
-      {/* Error message */}
-      {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div className="whitespace-pre-line">{error}</div>
-          </div>
-          {error.includes("URL") && (
-            <p className="text-xs text-red-500 pl-6">
-              ヒント: 求人ページをブラウザで開き、内容をコピーして上のテキスト欄に貼り付けることでも解析できます。
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Parse button */}
-      <Button
-        type="button"
-        size="lg"
-        className="w-full bg-violet-600 hover:bg-violet-700"
-        onClick={handleParse}
-        disabled={!hasInput || isParsing}
-      >
-        {isParsing ? (
-          <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            AIが解析中...
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-5 h-5 mr-2" />
-            AIで自動解析する
-          </>
-        )}
-      </Button>
     </div>
   );
 }

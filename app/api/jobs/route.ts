@@ -33,19 +33,27 @@ export async function GET() {
     employmentTypeName: (job.EmploymentType as unknown as { name: string } | null)?.name || "",
   }));
 
-  // 各求人の最新レコードを取得
-  const jobsWithRecords = await Promise.all(
-    mapped.map(async (job) => {
-      const { data: records } = await supabase
-        .from("JobRecord")
-        .select("type, platform, createdAt")
-        .eq("jobId", job.id)
-        .order("createdAt", { ascending: false })
-        .limit(1);
+  // 各求人の最新レコードを1クエリでまとめて取得(N+1回避)。
+  // createdAt 降順で全件のメタ情報だけを引き、求人ごとに最初の1件を採用する
+  const jobIds = mapped.map((job) => job.id);
+  const latestByJob: Record<string, { type: string; platform: string; createdAt: string }> = {};
+  if (jobIds.length > 0) {
+    const { data: recentRecords } = await supabase
+      .from("JobRecord")
+      .select("jobId, type, platform, createdAt")
+      .in("jobId", jobIds)
+      .order("createdAt", { ascending: false });
+    for (const r of recentRecords || []) {
+      if (!latestByJob[r.jobId]) {
+        latestByJob[r.jobId] = { type: r.type, platform: r.platform, createdAt: r.createdAt };
+      }
+    }
+  }
 
-      return { ...job, records: records || [] };
-    })
-  );
+  const jobsWithRecords = mapped.map((job) => ({
+    ...job,
+    records: latestByJob[job.id] ? [latestByJob[job.id]] : [],
+  }));
 
   return NextResponse.json(jobsWithRecords);
 }

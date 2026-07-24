@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppHeader } from "@/app/components/AppHeader";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/app/providers/auth-provider";
+import { BackgroundRunIndicator } from "@/app/components/workflow/BackgroundRunIndicator";
 
 // Airbnb Cereal VF の代替: 欧文 = Plus Jakarta Sans / 和文 = Zen Kaku Gothic New
 const jakartaSans = Plus_Jakarta_Sans({
@@ -42,6 +43,7 @@ export default function RootLayout({
         <AuthProvider>
           <AppHeader />
           {children}
+          <BackgroundRunIndicator />
           <Toaster position="top-right" richColors />
         </AuthProvider>
       </body>

@@ -195,6 +195,8 @@ export default function JobRewritePostingPage() {
     // jobIdも一緒にsessionStorageに保存
     sessionStorage.setItem("teamBInput", JSON.stringify(input));
     sessionStorage.setItem("teamBJobId", jobId);
+    // 前回実行の runId が残っていると進捗ページが古い実行へ復帰してしまうためクリア
+    sessionStorage.removeItem(`teamBRunId:${jobId}`);
 
     router.push(`/jobs/${jobId}/rewrite-posting/progress`);
   };
