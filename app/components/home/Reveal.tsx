@@ -1,21 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 interface RevealProps {
   children: ReactNode;
   delay?: number;
   className?: string;
+  direction?: "up" | "down" | "left" | "right" | "scale" | "spin";
+  distance?: number;
+  duration?: number;
 }
 
-export function Reveal({ children, delay = 0, className = "" }: RevealProps) {
+export function Reveal({
+  children,
+  delay = 0,
+  className = "",
+  direction = "up",
+  distance = 34,
+  duration = 850,
+}: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      !("IntersectionObserver" in window)
+    ) {
       setVisible(true);
       return;
     }
@@ -32,13 +51,20 @@ export function Reveal({ children, delay = 0, className = "" }: RevealProps) {
     return () => observer.disconnect();
   }, []);
 
+  const style = {
+    "--reveal-delay": `${delay}ms`,
+    "--reveal-distance": `${distance}px`,
+    "--reveal-distance-negative": `${distance * -1}px`,
+    "--reveal-duration": `${duration}ms`,
+  } as CSSProperties;
+
   return (
     <div
       ref={ref}
-      className={`transition-all duration-700 ease-out ${
-        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-      } ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
+      className={`lp-reveal ${className}`}
+      data-visible={visible ? "true" : "false"}
+      data-direction={direction}
+      style={style}
     >
       {children}
     </div>

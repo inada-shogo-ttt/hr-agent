@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { PLANS } from "@/lib/billing/plans";
+import { PLANS, creditToRuns } from "@/lib/billing/plans";
 import { PlanId } from "@/types/organization";
 
 interface BillingSummary {
@@ -128,12 +128,15 @@ export default function BillingPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">残クレジット</p>
+                  <p className="text-gray-500 text-xs">今月の残り生成回数</p>
                   <p className="font-medium">
-                    {yen(usage.remainingCreditYen)}
+                    新規あと{creditToRuns(usage.remainingCreditYen).teamA}回
                     <span className="text-gray-400 text-xs">
-                      {" "}/ {yen(usage.includedCreditYen)}
+                      （改善なら{creditToRuns(usage.remainingCreditYen).teamB}回）
                     </span>
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {yen(usage.remainingCreditYen)} / {yen(usage.includedCreditYen)}
                   </p>
                 </div>
                 <div>
@@ -166,47 +169,69 @@ export default function BillingPage() {
       </Card>
 
       {!org.billingExempt && !isActive && (
-        <div className="grid sm:grid-cols-3 gap-4">
-          {Object.values(PLANS).map((plan) => (
-            <Card key={plan.id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{plan.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-2xl font-semibold">
-                  {yen(plan.monthlyFeeYen)}
-                  <span className="text-sm font-normal text-gray-500">
-                    /月
-                  </span>
-                </p>
-                <ul className="text-xs text-gray-600 space-y-1">
-                  <li>
-                    込みクレジット:{" "}
-                    {plan.includedCreditYen > 0
-                      ? `${yen(plan.includedCreditYen)}相当`
-                      : "なし"}
-                  </li>
-                  <li>
-                    超過単価: 新規{yen(plan.overageUnitYen.team_a)} / 改善
-                    {yen(plan.overageUnitYen.team_b)}
-                  </li>
-                  <li>
-                    ユーザー数:{" "}
-                    {plan.seatLimit === null ? "無制限" : `${plan.seatLimit}名まで`}
-                  </li>
-                </ul>
-                <Button
-                  className="w-full"
-                  size="sm"
-                  disabled={submitting}
-                  onClick={() => handleCheckout(plan.id)}
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-3 gap-4 pt-2">
+            {Object.values(PLANS).map((plan) => {
+              const runs = creditToRuns(plan.includedCreditYen);
+              const isRecommended = plan.id === "standard";
+              return (
+                <Card
+                  key={plan.id}
+                  className={
+                    isRecommended
+                      ? "relative border-blue-400 ring-1 ring-blue-400"
+                      : "relative"
+                  }
                 >
-                  <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                  このプランを契約
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                  {isRecommended && (
+                    <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-blue-600 text-white">
+                      人気
+                    </Badge>
+                  )}
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{plan.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-2xl font-semibold">
+                      {yen(plan.monthlyFeeYen)}
+                      <span className="text-sm font-normal text-gray-500">
+                        /月
+                      </span>
+                    </p>
+                    <p className="text-sm font-medium text-blue-700">
+                      新規原稿 {runs.teamA}回分/月
+                      <span className="block text-xs font-normal text-gray-500">
+                        改善に充てるなら{runs.teamB}回分
+                      </span>
+                    </p>
+                    <ul className="text-xs text-gray-600 space-y-1">
+                      <li>
+                        超過単価: 新規{yen(plan.overageUnitYen.team_a)} / 改善
+                        {yen(plan.overageUnitYen.team_b)}
+                      </li>
+                      <li>
+                        ユーザー数:{" "}
+                        {plan.seatLimit === null ? "無制限" : `${plan.seatLimit}名まで`}
+                      </li>
+                    </ul>
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      disabled={submitting}
+                      onClick={() => handleCheckout(plan.id)}
+                    >
+                      <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                      このプランを契約
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-500">
+            新規生成1回で、選択した媒体（最大4媒体）すべての求人原稿とサムネイル画像をまとめて作成します。
+            クレジットは新規・改善のどちらにも使えます（未使用分の翌月繰り越しはありません）。
+          </p>
         </div>
       )}
     </div>
