@@ -56,14 +56,12 @@ export async function runThumbnailGenerationAgent(
   }
 
   try {
-    // 参考サムネ（構図参考）: Indeed 生成時のみ、登録済み事例から AI が1枚を自動選定
-    const compositionRefs = targets.includes("indeed")
-      ? await selectCompositionRefsForJob({
-          jobTitle: manuscript.indeed?.jobTitle || common.jobTitle,
-          industry: common.industry,
-          catchphrase: manuscript.indeed?.catchphrase || common.appealPoints || "",
-        })
-      : undefined;
+    // 参考サムネ（構図・デザイン参考）: 登録済み事例から AI がスロット別に1枚を自動選定（全媒体共通で使用）
+    const compositionRefs = await selectCompositionRefsForJob({
+      jobTitle: manuscript.indeed?.jobTitle || common.jobTitle,
+      industry: common.industry,
+      catchphrase: manuscript.indeed?.catchphrase || common.appealPoints || "",
+    });
 
     const result = await generatePlatformThumbnails({
       title: manuscript.indeed?.jobTitle || common.jobTitle,
@@ -75,6 +73,7 @@ export async function runThumbnailGenerationAgent(
       visualStyle,
       referenceImage: jobPostingInput.thumbnailReference || null,
       compositionRefs,
+      direction: jobPostingInput.thumbnailDirection,
     }, targets);
 
     return {
@@ -90,11 +89,10 @@ export async function runThumbnailGenerationAgent(
     };
   } catch (error) {
     console.error("[thumbnail-generation] Error:", error);
-    const makePlaceholders = (w: number, h: number) => [
-      `https://placehold.co/${w}x${h}/0066cc/ffffff?text=サムネイル1`,
-      `https://placehold.co/${w}x${h}/003399/ffffff?text=サムネイル2`,
-      `https://placehold.co/${w}x${h}/0099ff/ffffff?text=サムネイル3`,
-    ];
+    const makePlaceholders = (w: number, h: number) =>
+      [1, 2, 3, 4, 5].map(
+        (n) => `https://placehold.co/${w}x${h}/0066cc/ffffff?text=サムネイル${n}`
+      );
     const placeholders = makePlaceholders(800, 600);
     return {
       platformThumbnails: {

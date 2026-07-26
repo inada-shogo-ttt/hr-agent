@@ -1,0 +1,11 @@
+﻿テーブル物理名,テーブル論理名,除外理由
+JobRecord,原稿生成・改善実行履歴,Team A/B 実行結果のトランザクション履歴（type=team-a/team-b、入出力JSONを保持）
+PublishMetrics,掲載実績メトリクス,掲載期間ごとの表示回数・クリック・応募数等の実績記録（トランザクション）
+UsageLog,課金利用ログ,実行1回ごとの課金台帳（トランザクション）。kind の区分値のみマスタ候補に別掲
+WorkflowRun,ワークフロー実行状態,SSE 切断復旧用のシステム内部状態管理（status=running/completed/error）
+TrendCache,トレンド調査キャッシュ,Web検索結果のキャッシュ（TTL 7日・アプリ層判定）。システム内部データ。なお実DBには未作成
+PublishRequest,掲載依頼,旧掲載依頼フローのトランザクション。現行コードから未参照だが実DBに残存
+StatusHistory,ステータス変更履歴,旧承認フローの変更履歴。現行コードから未参照だが実DBに残存
+Notification,通知,旧フローの通知ログ。現行コードから未参照だが実DBに残存
+auth.users（Supabase Auth）,認証アカウント,Supabase Auth 管理領域（パスワードハッシュ等）。User.id と 1:1。統合時は認証基盤設計側で扱う
+Storage: thumbnails バケット,サムネイル画像ストレージ,ファイルストレージでありDBテーブルではない（ReferenceThumbnail 等から URL 参照）

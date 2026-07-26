@@ -22,16 +22,16 @@ export async function GET() {
 }
 
 // POST /api/reference-thumbnails — 参考サムネ登録（admin専用）
-// body: { images: base64 data URL[], slot: 1|2|3, description?: string }
+// body: { images: base64 data URL[], slot: 1|2|3|4|5, description?: string }
 export async function POST(request: NextRequest) {
   const auth = await requireRole(["super_admin"]);
   if ("error" in auth) return auth.error;
 
   const { images, slot, description } = await request.json();
 
-  if (!images?.length || ![1, 2, 3].includes(slot)) {
+  if (!images?.length || ![1, 2, 3, 4, 5].includes(slot)) {
     return NextResponse.json(
-      { error: "images と slot (1〜3) は必須です" },
+      { error: "images と slot (1〜5) は必須です" },
       { status: 400 }
     );
   }

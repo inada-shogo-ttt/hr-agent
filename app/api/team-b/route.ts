@@ -306,6 +306,7 @@ export async function POST(request: NextRequest) {
                 improvedPosting: input.existingPosting,
                 historyContext,
                 visualStyle,
+                direction: input.thumbnailDirection,
               })
             : Promise.resolve({
                 platformThumbnails: { indeed: [], airwork: [], jobmedley: [], hellowork: [] },

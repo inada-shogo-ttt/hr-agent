@@ -5,7 +5,7 @@ import { DesignImprovementInput, DesignImprovementOutput } from "./types";
 export async function runDesignImprovementAgent(
   input: DesignImprovementInput
 ): Promise<DesignImprovementOutput> {
-  const { improvedPosting, platform, historyContext, visualStyle } = input;
+  const { improvedPosting, platform, historyContext, visualStyle, direction } = input;
 
   // ハローワークはサムネイル不要
   if (platform === "hellowork") {
@@ -34,14 +34,12 @@ export async function runDesignImprovementAgent(
   }
 
   try {
-    // 参考サムネ（構図参考）: Indeed のみ、登録済み事例から AI が1枚を自動選定
-    const compositionRefs = platform === "indeed"
-      ? await selectCompositionRefsForJob({
-          jobTitle: improvedPosting.jobTitle || "求人募集",
-          industry,
-          catchphrase: improvedPosting.catchphrase || improvedPosting.appealTitle || "",
-        })
-      : undefined;
+    // 参考サムネ（構図・デザイン参考）: 登録済み事例から AI がスロット別に1枚を自動選定（全媒体共通で使用）
+    const compositionRefs = await selectCompositionRefsForJob({
+      jobTitle: improvedPosting.jobTitle || "求人募集",
+      industry,
+      catchphrase: improvedPosting.catchphrase || improvedPosting.appealTitle || "",
+    });
 
     const result = await generatePlatformThumbnailsSingle(
       {
@@ -53,6 +51,7 @@ export async function runDesignImprovementAgent(
         style: "recruitment",
         visualStyle,
         compositionRefs,
+        direction,
       },
       platform,
     );
@@ -65,21 +64,20 @@ export async function runDesignImprovementAgent(
     };
   } catch (error) {
     console.error("[design-improvement] Error:", error);
-    const placeholders = [
-      "https://placehold.co/800x600/0066cc/ffffff?text=改善サムネイル1",
-      "https://placehold.co/800x600/003399/ffffff?text=改善サムネイル2",
-      "https://placehold.co/800x600/0099ff/ffffff?text=改善サムネイル3",
-    ];
+    const slotNumbers = [1, 2, 3, 4, 5];
+    const placeholders = slotNumbers.map(
+      (n) => `https://placehold.co/800x600/0066cc/ffffff?text=改善サムネイル${n}`
+    );
     return {
       platformThumbnails: {
         indeed: platform === "indeed" ? placeholders : [],
         airwork: platform === "airwork" ? placeholders : [],
         hellowork: [],
-        jobmedley: platform === "jobmedley" ? [
-          "https://placehold.co/1024x576/0066cc/ffffff?text=改善サムネイル1",
-          "https://placehold.co/1024x576/003399/ffffff?text=改善サムネイル2",
-          "https://placehold.co/1024x576/0099ff/ffffff?text=改善サムネイル3",
-        ] : [],
+        jobmedley: platform === "jobmedley"
+          ? slotNumbers.map(
+              (n) => `https://placehold.co/1024x576/0066cc/ffffff?text=改善サムネイル${n}`
+            )
+          : [],
       },
       thumbnailUrls: placeholders,
       generationStatus: "placeholder",

@@ -11,15 +11,17 @@ import { Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fileToCompressedDataUrl } from "@/lib/client-image";
 
+type ReferenceSlot = 1 | 2 | 3 | 4 | 5;
+
 interface ReferenceThumbnailItem {
   id: string;
-  slot: 1 | 2 | 3;
+  slot: ReferenceSlot;
   url: string;
   description: string | null;
   createdAt: string;
 }
 
-const SLOT_SECTIONS: { slot: 1 | 2 | 3; title: string; description: string }[] = [
+const SLOT_SECTIONS: { slot: ReferenceSlot; title: string; description: string }[] = [
   {
     slot: 1,
     title: "1枚目（クリック率重視）",
@@ -34,6 +36,16 @@ const SLOT_SECTIONS: { slot: 1 | 2 | 3; title: string; description: string }[] =
     slot: 3,
     title: "3枚目（事業所の様子）",
     description: "職場空間が伝わる構図事例",
+  },
+  {
+    slot: 4,
+    title: "4枚目（待遇・数字訴求）",
+    description: "給与・休日などの数字コピーを載せる構図事例。未登録の間は構図参考なしで生成されます",
+  },
+  {
+    slot: 5,
+    title: "5枚目（働く人・仕事シーン）",
+    description: "実際の業務の1コマが伝わる構図事例。未登録の間は構図参考なしで生成されます",
   },
 ];
 
@@ -54,7 +66,7 @@ export default function ReferenceThumbnailsPage() {
     setLoading(false);
   }
 
-  async function handleUpload(slot: 1 | 2 | 3, e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleUpload(slot: ReferenceSlot, e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     const input = fileInputRefs.current[slot];
     if (!files?.length) return;

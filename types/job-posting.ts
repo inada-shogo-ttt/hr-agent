@@ -310,4 +310,6 @@ export interface JobPostingInput {
   thumbnailReference?: string | null; // サムネイル参考画像 (data URL)。指定時は i2i 生成
   // 出力する媒体。未指定・空の場合は全媒体を生成（後方互換）
   selectedPlatforms?: ("indeed" | "airwork" | "jobmedley" | "hellowork")[];
+  // 生成前にユーザーが選択したサムネイルの方向性。未指定は方向性なしで生成
+  thumbnailDirection?: import("@/types/thumbnail-direction").ThumbnailDirection;
 }

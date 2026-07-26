@@ -20,6 +20,11 @@ import {
 } from "./AIInputMode";
 import { JobPostingInput, CommonJobInfo } from "@/types/job-posting";
 import { Platform } from "@/types/platform";
+import { ThumbnailDirection } from "@/types/thumbnail-direction";
+import {
+  DirectionProposalDialog,
+  DirectionProposalRequest,
+} from "@/app/components/thumbnails/DirectionProposalDialog";
 import {
   Sparkles,
   ClipboardEdit,
@@ -141,6 +146,11 @@ export function JobInputForm({ jobId, initialData, reuseSourceJobId }: JobInputF
   });
   const [activeTab, setActiveTab] = useState("common");
   const thumbnailRefInputRef = useRef<HTMLInputElement>(null);
+  // サムネイル方向性の提案待ち状態（設定されるとモーダルが開く）
+  const [directionState, setDirectionState] = useState<{
+    input: JobPostingInput;
+    request: DirectionProposalRequest;
+  } | null>(null);
 
   const selectedPlatforms = formData.selectedPlatforms ?? ALL_PLATFORMS;
   const isDirectForm = method === "text" && manualVariant === "form";
@@ -194,6 +204,32 @@ export function JobInputForm({ jobId, initialData, reuseSourceJobId }: JobInputF
     router.push(`/jobs/${jobId}/new-posting/progress`);
   };
 
+  // 生成開始前にサムネイル方向性の提案を挟む。サムネ対象媒体がなければそのまま生成へ
+  const proceedToGeneration = (input: JobPostingInput) => {
+    const thumbnailTargets = (input.selectedPlatforms ?? ALL_PLATFORMS).filter(
+      (p) => p !== "hellowork"
+    );
+    if (thumbnailTargets.length === 0) {
+      goToProgress(input);
+      return;
+    }
+    setDirectionState({
+      input,
+      request: { source: "team-a", jobPostingInput: input, platforms: thumbnailTargets },
+    });
+  };
+
+  const handleDirectionSelect = (direction: ThumbnailDirection | null) => {
+    if (!directionState) return;
+    goToProgress({ ...directionState.input, thumbnailDirection: direction ?? undefined });
+  };
+
+  const handleDirectionCancel = () => {
+    setDirectionState(null);
+    setIsSubmitting(false);
+    setIsParsing(false);
+  };
+
   const canProceedStep2 = (() => {
     if (method === "text") {
       return manualVariant === "form" || aiInput.text.trim().length > 0;
@@ -213,10 +249,10 @@ export function JobInputForm({ jobId, initialData, reuseSourceJobId }: JobInputF
       return;
     }
 
-    // 詳細フォーム経由はAI解析なしで直接生成へ
+    // 詳細フォーム経由はAI解析なしで方向性提案へ
     if (isDirectForm) {
       setIsSubmitting(true);
-      goToProgress(latest);
+      proceedToGeneration(latest);
       return;
     }
 
@@ -258,7 +294,8 @@ export function JobInputForm({ jobId, initialData, reuseSourceJobId }: JobInputF
 
       const data = await res.json();
       const merged = formDataRef.current;
-      goToProgress({
+      setIsParsing(false);
+      proceedToGeneration({
         ...merged,
         common: { ...merged.common, ...(data.common as Partial<CommonJobInfo>) },
       });
@@ -645,6 +682,13 @@ export function JobInputForm({ jobId, initialData, reuseSourceJobId }: JobInputF
           </div>
         </div>
       )}
+
+      {/* サムネイル方向性の提案モーダル（生成開始前に3案＋お任せを提示） */}
+      <DirectionProposalDialog
+        request={directionState?.request ?? null}
+        onSelect={handleDirectionSelect}
+        onCancel={handleDirectionCancel}
+      />
     </div>
   );
 }

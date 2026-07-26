@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -62,6 +62,17 @@ export function ThumbnailRegenerateDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // スロット切替・参考画像変更時に、ユーザー編集済みプロンプトを勝手に上書きしないための記録
   const lastAutoPromptRef = useRef("");
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // 生成開始（スケルトン）・結果表示のタイミングで、スクロール領域の下部へ自動スクロール
+  useEffect(() => {
+    if (generating || results.length > 0) {
+      scrollAreaRef.current?.scrollTo({
+        top: scrollAreaRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [generating, results]);
 
   const slotMode = !!slotOptions?.length;
   const aspectClass = PLATFORM_ASPECT_CLASS[platform] || "aspect-video";
@@ -174,24 +185,25 @@ export function ThumbnailRegenerateDialog({
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => !generating && setOpen(v)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        {/* ヘッダー・フッター固定 + 中身のみスクロール（縦に伸びても操作ボタンが見切れない構造） */}
+        <DialogContent className="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-3xl">
+          <DialogHeader className="border-b px-6 py-4">
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
               サムネイルをAIで再生成
             </DialogTitle>
             <DialogDescription>
               {PLATFORM_LABELS[platform] || platform}
-              用のサムネイルを生成します。参考画像を選ぶと、その構図・雰囲気を踏襲します
+              用のサムネイルを生成します。参考画像を選ぶと、その雰囲気を踏襲します
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 mt-2">
+          <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
             {/* スロット選択（Indeed のみ） */}
             {slotMode && (
               <div className="space-y-2">
                 <Label className="text-xs">作り直すサムネイル</Label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {slotOptions!.map((option, i) => (
                     <button
                       key={i}
@@ -308,41 +320,6 @@ export function ThumbnailRegenerateDialog({
               </div>
             )}
 
-            {/* 生成枚数 */}
-            <div className="space-y-2">
-              <Label className="text-xs">生成枚数</Label>
-              <div className="flex gap-2">
-                {[1, 2, 3].map((n) => (
-                  <Button
-                    key={n}
-                    variant={count === n ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCount(n)}
-                  >
-                    {n}枚
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <Button
-              className="w-full"
-              disabled={generating || !prompt.trim()}
-              onClick={handleGenerate}
-            >
-              {generating ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin mr-2" />
-                  生成中...（{count}枚・1分ほどかかります）
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  生成する
-                </>
-              )}
-            </Button>
-
             {/* 生成中スケルトン */}
             {generating && (
               <div className="grid grid-cols-3 gap-2">
@@ -387,15 +364,51 @@ export function ThumbnailRegenerateDialog({
                     </button>
                   ))}
                 </div>
-                <Button
-                  className="w-full"
-                  variant="secondary"
-                  disabled={selected.size === 0}
-                  onClick={handleAdd}
-                >
-                  選択した{selected.size}枚をサムネイルに追加
-                </Button>
               </div>
+            )}
+          </div>
+
+          {/* フッター（固定）: 枚数選択と生成・追加ボタンは常に見える位置に置く */}
+          <div className="border-t px-6 py-4 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-xs text-muted-foreground">枚数</span>
+              {[1, 2, 3].map((n) => (
+                <Button
+                  key={n}
+                  variant={count === n ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCount(n)}
+                >
+                  {n}
+                </Button>
+              ))}
+            </div>
+            <Button
+              className="flex-1 min-w-36"
+              variant={results.length > 0 ? "outline" : "default"}
+              disabled={generating || !prompt.trim()}
+              onClick={handleGenerate}
+            >
+              {generating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-current/40 border-t-current rounded-full animate-spin mr-2" />
+                  生成中...（{count}枚・1分ほど）
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  {results.length > 0 ? "もう一度生成" : "生成する"}
+                </>
+              )}
+            </Button>
+            {results.length > 0 && (
+              <Button
+                className="flex-1 min-w-40"
+                disabled={selected.size === 0}
+                onClick={handleAdd}
+              >
+                選択した{selected.size}枚をサムネイルに追加
+              </Button>
             )}
           </div>
         </DialogContent>

@@ -146,6 +146,8 @@ export interface TeamBInput {
   thumbnailUrls?: string[];
   // サムネイルを再生成するか(未指定は true = 従来挙動)
   generateThumbnails?: boolean;
+  // 生成前にユーザーが選択したサムネイルの方向性。未指定は方向性なしで生成
+  thumbnailDirection?: import("@/types/thumbnail-direction").ThumbnailDirection;
 }
 
 // 改善差分型

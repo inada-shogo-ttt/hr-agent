@@ -11,6 +11,11 @@ import { ExistingJobMedleyFields } from "@/app/components/forms/ExistingJobMedle
 import { ExistingHelloWorkFields } from "@/app/components/forms/ExistingHelloWorkFields";
 import { TeamBInput, ExistingPostingFields, IndeedMetrics, AirWorkMetrics } from "@/types/team-b";
 import { Platform } from "@/types/platform";
+import { ThumbnailDirection } from "@/types/thumbnail-direction";
+import {
+  DirectionProposalDialog,
+  DirectionProposalRequest,
+} from "@/app/components/thumbnails/DirectionProposalDialog";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle, ImageIcon, AlertTriangle, BarChart3 } from "lucide-react";
 import { ThumbnailPreview } from "@/app/components/output/ThumbnailPreview";
@@ -45,6 +50,11 @@ export default function JobRewritePostingPage() {
   const [historyCount, setHistoryCount] = useState(0);
   const [thumbnailUrls, setThumbnailUrls] = useState<string[]>([]);
   const [publishMetrics, setPublishMetrics] = useState<PublishMetric[]>([]);
+  // サムネイル方向性の提案待ち状態（設定されるとモーダルが開く）
+  const [directionState, setDirectionState] = useState<{
+    input: TeamBInput;
+    request: DirectionProposalRequest;
+  } | null>(null);
 
   // 最新状態（Team A outputData + Team B improvedPosting をマージ済み）を自動ロード
   useEffect(() => {
@@ -181,6 +191,16 @@ export default function JobRewritePostingPage() {
     setPosting((prev) => ({ ...prev, ...data }));
   };
 
+  const goToProgress = (input: TeamBInput) => {
+    // jobIdも一緒にsessionStorageに保存
+    sessionStorage.setItem("teamBInput", JSON.stringify(input));
+    sessionStorage.setItem("teamBJobId", jobId);
+    // 前回実行の runId が残っていると進捗ページが古い実行へ復帰してしまうためクリア
+    sessionStorage.removeItem(`teamBRunId:${jobId}`);
+
+    router.push(`/jobs/${jobId}/rewrite-posting/progress`);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -192,13 +212,26 @@ export default function JobRewritePostingPage() {
       generateThumbnails,
     };
 
-    // jobIdも一緒にsessionStorageに保存
-    sessionStorage.setItem("teamBInput", JSON.stringify(input));
-    sessionStorage.setItem("teamBJobId", jobId);
-    // 前回実行の runId が残っていると進捗ページが古い実行へ復帰してしまうためクリア
-    sessionStorage.removeItem(`teamBRunId:${jobId}`);
+    // サムネイル再生成ONのときのみ、生成前に方向性の提案を挟む
+    if (generateThumbnails && platform !== "hellowork") {
+      setDirectionState({
+        input,
+        request: { source: "team-b", existingPosting: posting, platforms: [platform] },
+      });
+      return;
+    }
 
-    router.push(`/jobs/${jobId}/rewrite-posting/progress`);
+    goToProgress(input);
+  };
+
+  const handleDirectionSelect = (direction: ThumbnailDirection | null) => {
+    if (!directionState) return;
+    goToProgress({ ...directionState.input, thumbnailDirection: direction ?? undefined });
+  };
+
+  const handleDirectionCancel = () => {
+    setDirectionState(null);
+    setIsSubmitting(false);
   };
 
   if (loading) {
@@ -378,6 +411,13 @@ export default function JobRewritePostingPage() {
             </CardContent>
           </Card>
         </form>
+
+        {/* サムネイル方向性の提案モーダル（生成開始前に3案＋お任せを提示） */}
+        <DirectionProposalDialog
+          request={directionState?.request ?? null}
+          onSelect={handleDirectionSelect}
+          onCancel={handleDirectionCancel}
+        />
       </div>
     </main>
   );

@@ -67,6 +67,8 @@ export interface DesignImprovementInput {
     colorPalette?: string;
     sceneDescription?: string;
   };
+  // 生成前にユーザーが選択したサムネイルの方向性。未指定は方向性なしで生成
+  direction?: import("@/types/thumbnail-direction").ThumbnailDirection;
 }
 
 export interface DesignImprovementOutput {

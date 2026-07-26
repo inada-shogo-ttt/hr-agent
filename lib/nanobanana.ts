@@ -1,16 +1,21 @@
 // 画像生成API
 // エンジン: OpenAI gpt-image-2（テキスト生成 = images/generations、参考画像あり = images/edits）
 // プロンプト生成: Claude API で求人情報から最適な画像プロンプトを自動生成
+// 2026-07 改定: 全媒体（indeed/airwork/jobmedley）をスロット式5枚生成に統一。
+// 生成前にユーザーが選択した方向性（ThumbnailDirection）をプロンプトへ注入する。
 
 import sharp from "sharp";
 import { anthropic, DEFAULT_MODEL } from "@/lib/claude";
 import { recordImageUsage } from "@/lib/api-cost";
+import { ThumbnailDirection } from "@/types/thumbnail-direction";
 import {
-  buildIndeedSlotBasePrompt,
-  buildIndeedSlotCompositionPrompt,
-  buildIndeedSlotDualReferencePrompt,
-  buildIndeedSlotReferencePrompt,
+  ThumbnailSlot,
+  buildSlotBasePrompt,
+  buildSlotCompositionPrompt,
+  buildSlotDualReferencePrompt,
+  buildSlotReferencePrompt,
   buildSlotRequirementsForClaude,
+  resolveSlotPlan,
   shortenCatchCopy,
 } from "@/lib/thumbnail-prompts";
 
@@ -26,13 +31,18 @@ export interface ThumbnailGenerationRequest {
     colorPalette?: string;         // カラーパレットの説明
     sceneDescription?: string;     // 場面の説明
   };
-  referenceImage?: string | null;  // 参考画像 (data URL)。指定時は images/edits で Image-to-Image 生成
-  // 参考サムネ（構図参考、スロット別・data URL）。Indeed のスロット式生成でのみ使用
+  // アップ画像（事業所写真、data URL）。人物・雰囲気のみの素材参考として images/edits に添付する
+  referenceImage?: string | null;
+  // 登録画像（参考サムネ = 構図・デザイン参考、スロット別・data URL）
   compositionRefs?: {
     slot1?: string | null;
     slot2?: string | null;
     slot3?: string | null;
+    slot4?: string | null;
+    slot5?: string | null;
   };
+  // 生成前にユーザーが選択した方向性。未指定は方向性なしで生成
+  direction?: ThumbnailDirection;
 }
 
 export interface ThumbnailGenerationResponse {
@@ -43,9 +53,9 @@ export interface ThumbnailGenerationResponse {
 
 // 媒体別サムネイル型
 export interface PlatformThumbnails {
-  indeed: string[];   // 3枚, 800×600
-  airwork: string[];  // 3枚, 800×600
-  jobmedley: string[]; // 3枚, 1024×576
+  indeed: string[];   // 5枚, 800×600
+  airwork: string[];  // 5枚, 800×600
+  jobmedley: string[]; // 5枚, 1024×576
   hellowork: string[]; // ハローワークはサムネイル不要（常に空配列）
 }
 
@@ -62,21 +72,17 @@ const PLATFORM_IMAGE_CONFIG = {
   jobmedley: { width: 1024, height: 576, aspectRatio: "16:9" as const },
 };
 
+const SLOT_NUMBERS: ThumbnailSlot[] = [1, 2, 3, 4, 5];
+
 function makePlaceholders(width: number, height: number): string[] {
-  return [
-    `https://placehold.co/${width}x${height}/1e40af/ffffff?text=サムネイル+1`,
-    `https://placehold.co/${width}x${height}/1d4ed8/ffffff?text=サムネイル+2`,
-    `https://placehold.co/${width}x${height}/2563eb/ffffff?text=サムネイル+3`,
-  ];
+  return SLOT_NUMBERS.map(
+    (slot) => `https://placehold.co/${width}x${height}/1e40af/ffffff?text=サムネイル+${slot}`
+  );
 }
 
-// ---------- Claude による画像プロンプト生成 ----------
+// ---------- Claude によるスロット別プロンプト生成（方向性なしの t2i フォールバック） ----------
 
-interface GeneratedPrompts {
-  corporate: string;
-  warm: string;
-  dynamic: string;
-}
+type GeneratedSlotPrompts = Record<`slot${ThumbnailSlot}`, string>;
 
 // Claude レスポンスから JSON を抽出（```json ブロック or 裸のJSON）
 function extractJson<T>(text: string): T {
@@ -95,25 +101,26 @@ function extractJson<T>(text: string): T {
   }
 }
 
-async function generateImagePromptsWithClaude(
+async function generateSlotPromptsWithClaude(
   request: ThumbnailGenerationRequest,
-  platform: string,
+  platformLabel: string,
   aspectRatio: string,
-): Promise<GeneratedPrompts> {
+): Promise<GeneratedSlotPrompts> {
+  const shortCopy = shortenCatchCopy(request.catchphrase, request.title);
   const message = await anthropic.messages.create({
     model: DEFAULT_MODEL,
-    max_tokens: 2048,
-    system: `あなたは画像生成AI（gpt-image-2）向けのプロンプトエンジニアです。日本語の求人情報をもとに、求人バナー画像を生成するための最適なプロンプトを3パターン作成してください。プロンプトは必ず日本語で書いてください。指定されたJSON形式のみを出力し、他のテキストは一切含めないでください。
+    max_tokens: 3000,
+    system: `あなたは画像生成AI（gpt-image-2）向けのプロンプトエンジニアです。日本語の求人情報をもとに、${platformLabel} 用の求人サムネイル5枚（それぞれ目的が異なる）を生成するためのプロンプトを作成してください。プロンプトは必ず日本語で書いてください。指定されたJSON形式のみを出力し、他のテキストは一切含めないでください。
 
-重要: 3パターンすべてで以下のビジュアル要素を統一してください:
+重要: 5スロットすべてで以下のビジュアル要素を統一し、同じ職場の連作として見えるようにしてください:
 - 登場人物の服装（業種に応じたユニフォームを統一）
-- メインカラーパレット（アクセントカラーのみ変える）
-- 撮影環境・背景（同一の職場空間、アングルのみ変える）
-- 人物の年代・人数構成（統一する）
-- 照明の質感（自然光ベースで統一）`,
+- メインカラーパレット
+- 撮影環境・背景（同一の職場空間）
+- 照明の質感（自然光ベースで統一）
+※人数と構図はスロットごとの要件に従って変えること`,
     messages: [{
       role: "user",
-      content: `以下の求人情報から、${platform}用の求人バナー画像を生成するためのプロンプトを3パターン作成してください。
+      content: `以下の求人情報から、${platformLabel} 用の求人サムネイル5枚を生成するためのプロンプトをスロット別に作成してください。
 
 ## 求人情報
 - 職種: ${request.title}
@@ -122,90 +129,12 @@ async function generateImagePromptsWithClaude(
 - キャッチコピー: ${request.catchphrase}
 - アスペクト比: ${aspectRatio}
 
-## 統一ルール（3パターン共通で守ること）
-- 登場人物は同じ人数（2-3名）、同じ年代（20-30代中心）、同じ服装で描写すること
-- 服装は「${request.industry}」業種に適したユニフォーム（例: 介護→白ポロシャツ、IT→ビジネスカジュアル、飲食→制服エプロン、建設→作業着ヘルメット）
-- 背景は同一の職場空間とし、カメラのアングルや構図のみ変えること
-- 照明は全パターン自然光ベースの明るいトーンで統一
-${request.visualStyle ? `
-## ビジュアルスタイル指定（前回のスタイルを引き継ぎ）
-- 服装: ${request.visualStyle.uniformDescription || "業種に適したユニフォーム"}
-- カラーパレット: ${request.visualStyle.colorPalette || "プロフェッショナルな配色"}
-- シーン: ${request.visualStyle.sceneDescription || "職場空間"}
-` : ""}${request.referenceImage ? `
-## 参考画像あり
-画像生成時に参考画像が添付されます。各プロンプトの冒頭に「添付の参考画像の構図・色調・雰囲気・スタイルを踏襲しつつ」という指示を必ず含めてください。
-` : ""}
-## 3パターンの違い（上記統一ルールを守りつつ、以下の点のみ変化させる）
-1. **corporate**: 正面アングル、メインカラー＋白の配色、落ち着いたプロフェッショナルな表情
-2. **warm**: やや斜めアングル、メインカラー＋暖色アクセント、自然な笑顔・会話シーン
-3. **dynamic**: ローアングルまたは広角、メインカラー＋ビビッドなアクセント、活動的な動きのあるシーン
-
-## プロンプト作成ルール
-- 必ず日本語で記述すること
-- 「${request.industry}」業界と「${request.title}」職種に特化した具体的なシーン描写を含めること（例: 看護師なら「病棟で患者に笑顔で対応する看護師」、ITエンジニアなら「モダンなオフィスでペアプログラミングするエンジニア」）
-- 画像内にテキストや文字を含めないよう明示的に指示すること
-- 高品質・プロフェッショナルな仕上がりを指示すること
-- 日本の求人市場に適した、リアルで自然な人物・職場描写であること
-- 各プロンプトは200〜400文字程度
-
-以下のJSON形式で出力してください:
-{
-  "corporate": "corporateパターンのプロンプト",
-  "warm": "warmパターンのプロンプト",
-  "dynamic": "dynamicパターンのプロンプト"
-}`,
-    }],
-  });
-
-  const content = message.content[0];
-  if (content.type !== "text" || !content.text) {
-    throw new Error("Claude: プロンプト生成レスポンスが不正です");
-  }
-
-  return extractJson<GeneratedPrompts>(content.text);
-}
-
-// ---------- Indeed スロット式プロンプト生成（1枚目=CTR重視 / 2枚目=雰囲気 / 3枚目=事業所） ----------
-
-interface GeneratedSlotPrompts {
-  slot1: string;
-  slot2: string;
-  slot3: string;
-}
-
-async function generateIndeedSlotPromptsWithClaude(
-  request: ThumbnailGenerationRequest,
-): Promise<GeneratedSlotPrompts> {
-  const shortCopy = shortenCatchCopy(request.catchphrase, request.title);
-  const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL,
-    max_tokens: 2048,
-    system: `あなたは画像生成AI（gpt-image-2）向けのプロンプトエンジニアです。日本語の求人情報をもとに、Indeed 用の求人サムネイル3枚（それぞれ目的が異なる）を生成するためのプロンプトを作成してください。プロンプトは必ず日本語で書いてください。指定されたJSON形式のみを出力し、他のテキストは一切含めないでください。
-
-重要: 3スロットすべてで以下のビジュアル要素を統一し、同じ職場の連作として見えるようにしてください:
-- 登場人物の服装（業種に応じたユニフォームを統一）
-- メインカラーパレット
-- 撮影環境・背景（同一の職場空間）
-- 照明の質感（自然光ベースで統一）
-※人数と構図はスロットごとの要件に従って変えること`,
-    messages: [{
-      role: "user",
-      content: `以下の求人情報から、Indeed 用の求人サムネイル3枚を生成するためのプロンプトをスロット別に作成してください。
-
-## 求人情報
-- 職種: ${request.title}
-- 会社名: ${request.companyName}
-- 業種: ${request.industry}
-- キャッチコピー: ${request.catchphrase}
-- アスペクト比: 4:3
-
 ${buildSlotRequirementsForClaude(shortCopy)}
 
 ## 統一ルール
 - 服装は「${request.industry}」業種に適したユニフォーム（例: 介護→白ポロシャツ、IT→ビジネスカジュアル、飲食→制服エプロン、建設→作業着ヘルメット）
 - 登場人物は20-30代中心
-- 3枚とも同一の職場空間・同じカラーパレット・自然光ベースの明るいトーンで統一
+- 5枚とも同一の職場空間・同じカラーパレット・自然光ベースの明るいトーンで統一
 ${request.visualStyle ? `
 ## ビジュアルスタイル指定（前回のスタイルを引き継ぎ）
 - 服装: ${request.visualStyle.uniformDescription || "業種に適したユニフォーム"}
@@ -223,7 +152,9 @@ ${request.visualStyle ? `
 {
   "slot1": "1枚目のプロンプト",
   "slot2": "2枚目のプロンプト",
-  "slot3": "3枚目のプロンプト"
+  "slot3": "3枚目のプロンプト",
+  "slot4": "4枚目のプロンプト",
+  "slot5": "5枚目のプロンプト"
 }`,
     }],
   });
@@ -234,38 +165,6 @@ ${request.visualStyle ? `
   }
 
   return extractJson<GeneratedSlotPrompts>(content.text);
-}
-
-// Claudeプロンプト生成のフォールバック（API未設定時 or エラー時）
-function buildFallbackPrompt(
-  request: ThumbnailGenerationRequest,
-  variant: "corporate" | "warm" | "dynamic",
-): string {
-  const uniformDesc = request.visualStyle?.uniformDescription || `${request.industry}業種に適したユニフォーム`;
-  const colorDesc = request.visualStyle?.colorPalette || "プロフェッショナルな配色";
-  const sceneDesc = request.visualStyle?.sceneDescription || `${request.industry}業界の職場空間`;
-
-  const variantDescriptions = {
-    corporate: `正面アングル。${sceneDesc}。${uniformDesc}を着た20-30代の2-3名のスタッフ。${colorDesc}をベースに白をアクセントとした清潔感のある配色。落ち着いたプロフェッショナルな表情。自然光ベースの明るい照明。`,
-    warm: `やや斜めアングル。${sceneDesc}。${uniformDesc}を着た20-30代の2-3名のスタッフが自然に会話するシーン。${colorDesc}をベースに暖色をアクセントとした温かい色調。自然な笑顔。自然光ベースの明るい照明。`,
-    dynamic: `ローアングルまたは広角。${sceneDesc}。${uniformDesc}を着た20-30代の2-3名のスタッフが活動的に働くシーン。${colorDesc}をベースにビビッドなアクセントカラー。動きのあるポーズ。自然光ベースの明るい照明。`,
-  };
-
-  return `日本の求人サイト用のプロフェッショナルなバナー画像を生成してください。
-
-職種: ${request.title}
-会社: ${request.companyName}
-業種: ${request.industry}
-
-ビジュアルスタイル: ${variantDescriptions[variant]}
-
-画像の要件:
-- ${request.industry}業界の実際の職場をリアルに表現すること
-- 日本の求人市場にふさわしいプロフェッショナルな品質
-- 清潔感のある構図で視覚的な余白を持たせること
-- 画像内にテキスト、ロゴ、文字を一切含めないこと
-- 純粋な写真・ビジュアルのみで構成すること
-- 信頼感、成長の可能性、前向きな職場文化を伝えること`;
 }
 
 function getApiKey(): string | undefined {
@@ -322,7 +221,7 @@ const GPT_IMAGE_MODEL = "gpt-image-2";
 // 制約: 両辺16の倍数 かつ 総ピクセル数 655,360 以上（1024x576 は下回るため不可）
 const ASPECT_SIZE_MAP: Record<string, string> = {
   "16:9": "1536x864",
-  "3:2": "1536x1024", // 参考画像モードのマスター用（4:3と16:9両方へのクロップ耐性が高い）
+  "3:2": "1536x1024",
   "4:3": "1024x768",
   "1:1": "1024x1024",
   "3:4": "768x1024",
@@ -419,57 +318,26 @@ async function callGptImage(
   }
 }
 
-// gpt-image-2 で1枚生成
-async function generateWithGptImage(
-  prompt: string,
-  aspectRatio: string = "16:9",
-  referenceImage?: string | null,
-): Promise<string> {
-  const urls = await callGptImage(prompt, aspectRatio, referenceImage ? [referenceImage] : null, 1);
-  return urls[0];
-}
+// ---------- スロット式生成（全媒体共通: 1〜5枚目） ----------
 
-// ---------- 媒体別生成 ----------
-
-// 参考画像モード用プロンプト: 画像を主役にした短い編集指示
-// （詳細なシーン描写プロンプトは参考画像と競合して「似ない」原因になるため使わない）
-// 3バリエーションで変化の軸を明示し、同じ絵が複数枚出るのを防ぐ
-export type ReferenceVariant = "faithful" | "angle" | "scene";
-
-function buildReferenceEditPrompt(
-  request: ThumbnailGenerationRequest,
-  variant: ReferenceVariant = "faithful",
-): string {
-  const base = `「${request.industry}」業界の「${request.title}」の求人バナー用写真として仕上げてください。人物の表情は明るく親しみやすく。画像内にテキスト・ロゴ・文字は一切入れないでください。`;
-
-  switch (variant) {
-    case "faithful":
-      return `添付の参考画像をベースに、構図・人物の配置・服装・背景・色調・照明・全体の雰囲気を忠実に維持したまま、${base}`;
-    case "angle":
-      return `添付の参考画像と同じ人物・服装・場所・色調・照明の雰囲気を保ったまま、カメラアングルと人物のポーズを変えた別カットとして描いてください。${base}`;
-    case "scene":
-      return `添付の参考画像と同じ人物・服装・職場・色調の世界観を保ったまま、実際に業務をしている動きのある別のシーンとして描いてください。${base}`;
-  }
-}
-
-// Indeed 専用: スロット式（1枚目=クリック率重視 / 2枚目=職場の雰囲気 / 3枚目=事業所）
 // スロットごとに参照画像の組み合わせで生成方法を切り替える:
-// - 参考サムネ（構図）+ 事業所写真（素材）: 2枚を image[] で添付し、役割をプロンプトで指定
-// - 参考サムネのみ: 構図を踏襲し、内容はプロンプト記述から生成
-// - 事業所写真のみ: 写真の雰囲気（内装・色調・服装・照明）を引き継ぐ（3枚目のみ構図も忠実に維持）
-// - どちらもなし: Claude でスロット別プロンプトを生成してテキスト生成
+// - 参考サムネ（構図・デザイン）+ 事業所写真（人物・雰囲気素材）: 2枚を image[] で添付し、役割をプロンプトで指定
+// - 参考サムネのみ: 構図・デザインを踏襲し、内容はプロンプト記述から生成
+// - 事業所写真のみ: 写真の人物・内装の雰囲気のみを引き継ぐ（構図はスロットの目的に従う）
+// - どちらもなし: 方向性があれば直接プロンプト構築、なければ Claude でスロット別プロンプトを生成
 // 参照画像と競合するため、i2i 時は Claude の詳細シーン描写はスキップし短い編集プロンプトを使う。
+// input-images レート制限（5枚/分）対策として、スロットは 3+2 の2バッチ逐次で実行する。
 // スロット順（=配列順）を維持し、失敗分はスロット位置を保ったまま1回リトライする。
-async function generateIndeedSlotThumbnails(
+async function generateSlotThumbnails(
   request: ThumbnailGenerationRequest,
+  platform: keyof typeof PLATFORM_IMAGE_CONFIG,
 ): Promise<{ urls: string[]; allSuccess: boolean }> {
-  const config = PLATFORM_IMAGE_CONFIG.indeed;
+  const config = PLATFORM_IMAGE_CONFIG[platform];
   const referenceImage = request.referenceImage || null;
-  const compositionRefs = [
-    request.compositionRefs?.slot1 || null,
-    request.compositionRefs?.slot2 || null,
-    request.compositionRefs?.slot3 || null,
-  ];
+  const direction = request.direction;
+  const compositionRefs = SLOT_NUMBERS.map(
+    (slot) => request.compositionRefs?.[`slot${slot}`] || null
+  );
   const info = {
     jobTitle: request.title,
     catchphrase: request.catchphrase,
@@ -477,79 +345,99 @@ async function generateIndeedSlotThumbnails(
     industry: request.industry,
   };
 
-  // 参照画像が一切ないスロットがある場合のみ Claude で t2i プロンプトを生成
+  // 参照画像が一切ないスロット用の t2i プロンプトを準備
+  // 方向性ありは直接構築（Claude 呼び出し不要）、なしは Claude 生成 → 失敗時ベースプロンプト
   const needsT2i = compositionRefs.some((comp) => !comp && !referenceImage);
   let t2iPrompts: GeneratedSlotPrompts | null = null;
   if (needsT2i) {
-    try {
-      t2iPrompts = await generateIndeedSlotPromptsWithClaude(request);
-      console.log("[thumbnail] indeed: スロット別プロンプト生成成功");
-    } catch (error) {
-      console.warn("[thumbnail] indeed: スロット別プロンプト生成失敗、フォールバック使用:", error);
-      t2iPrompts = {
-        slot1: buildIndeedSlotBasePrompt(1, info, request.visualStyle),
-        slot2: buildIndeedSlotBasePrompt(2, info, request.visualStyle),
-        slot3: buildIndeedSlotBasePrompt(3, info, request.visualStyle),
-      };
+    if (direction) {
+      t2iPrompts = Object.fromEntries(
+        SLOT_NUMBERS.map((slot) => [
+          `slot${slot}`,
+          buildSlotBasePrompt(slot, info, request.visualStyle, resolveSlotPlan(direction, slot)),
+        ])
+      ) as GeneratedSlotPrompts;
+    } else {
+      try {
+        t2iPrompts = await generateSlotPromptsWithClaude(request, platform, config.aspectRatio);
+        console.log(`[thumbnail] ${platform}: スロット別プロンプト生成成功`);
+      } catch (error) {
+        console.warn(`[thumbnail] ${platform}: スロット別プロンプト生成失敗、フォールバック使用:`, error);
+        t2iPrompts = Object.fromEntries(
+          SLOT_NUMBERS.map((slot) => [
+            `slot${slot}`,
+            buildSlotBasePrompt(slot, info, request.visualStyle),
+          ])
+        ) as GeneratedSlotPrompts;
+      }
     }
   }
 
-  const slotJobs = ([1, 2, 3] as const).map((slot, i) => {
+  const slotJobs = SLOT_NUMBERS.map((slot, i) => {
+    const plan = resolveSlotPlan(direction, slot);
     const comp = compositionRefs[i];
     if (comp && referenceImage) {
       // 添付順は [構図参考, 素材] 固定（プロンプトが「1枚目/2枚目の画像」で参照）
       return {
         mode: "構図+写真",
-        prompt: buildIndeedSlotDualReferencePrompt(slot, info),
+        prompt: buildSlotDualReferencePrompt(slot, info, plan),
         references: [comp, referenceImage],
       };
     }
     if (comp) {
       return {
         mode: "構図のみ",
-        prompt: buildIndeedSlotCompositionPrompt(slot, info, request.visualStyle),
+        prompt: buildSlotCompositionPrompt(slot, info, request.visualStyle, plan),
         references: [comp],
       };
     }
     if (referenceImage) {
       return {
         mode: "写真のみ",
-        prompt: buildIndeedSlotReferencePrompt(slot, info),
+        prompt: buildSlotReferencePrompt(slot, info, plan),
         references: [referenceImage],
       };
     }
     return {
       mode: "テキスト生成",
-      prompt: t2iPrompts![`slot${slot}` as keyof GeneratedSlotPrompts],
+      prompt: t2iPrompts![`slot${slot}`],
       references: null,
     };
   });
   console.log(
-    `[thumbnail] indeed: スロット式生成（${slotJobs.map((j, i) => `${i + 1}枚目=${j.mode}`).join(" / ")}）`
+    `[thumbnail] ${platform}: スロット式生成（${slotJobs.map((j, i) => `${i + 1}枚目=${j.mode}`).join(" / ")}${direction ? ` / 方向性=${direction.name}` : ""}）`
   );
 
-  const slotResults: (string | null)[] = [null, null, null];
+  const slotResults: (string | null)[] = SLOT_NUMBERS.map(() => null);
   const runSlot = async (i: number) => {
     const urls = await callGptImage(slotJobs[i].prompt, config.aspectRatio, slotJobs[i].references, 1);
     slotResults[i] = urls[0];
   };
 
-  const results = await Promise.allSettled(slotJobs.map((_, i) => runSlot(i)));
-  const failed = results
-    .map((r, i) => (r.status === "rejected" ? i : -1))
-    .filter((i) => i >= 0);
-  for (const i of failed) {
-    console.error(`[gpt-image] indeed/slot${i + 1} failed:`, (results[i] as PromiseRejectedResult).reason);
+  // input-images レート制限対策: 3+2 の2バッチ逐次
+  const batches = [[0, 1, 2], [3, 4]];
+  const failed: number[] = [];
+  for (const batch of batches) {
+    const results = await Promise.allSettled(batch.map((i) => runSlot(i)));
+    for (let j = 0; j < results.length; j++) {
+      if (results[j].status === "rejected") {
+        failed.push(batch[j]);
+        console.error(
+          `[gpt-image] ${platform}/slot${batch[j] + 1} failed:`,
+          (results[j] as PromiseRejectedResult).reason
+        );
+      }
+    }
   }
 
   // 失敗分を1回だけリトライ（一時的なレート制限・5xx対策）
   if (failed.length > 0) {
-    console.log(`[gpt-image] indeed: ${failed.length}スロット失敗。リトライ...`);
+    console.log(`[gpt-image] ${platform}: ${failed.length}スロット失敗。リトライ...`);
     const retryResults = await Promise.allSettled(failed.map((i) => runSlot(i)));
     for (let j = 0; j < retryResults.length; j++) {
       if (retryResults[j].status === "rejected") {
         console.error(
-          `[gpt-image] indeed/slot${failed[j] + 1} retry also failed:`,
+          `[gpt-image] ${platform}/slot${failed[j] + 1} retry also failed:`,
           (retryResults[j] as PromiseRejectedResult).reason
         );
       }
@@ -560,153 +448,10 @@ async function generateIndeedSlotThumbnails(
   const urls = await Promise.all(
     generated.map((url) => compressImage(url, config.width, config.height))
   );
-  return { urls, allSuccess: urls.length === 3 };
-}
-
-// 1媒体分（3バリエーション）を生成してリサイズ・圧縮
-async function generateForPlatform(
-  request: ThumbnailGenerationRequest,
-  platform: keyof typeof PLATFORM_IMAGE_CONFIG,
-): Promise<{ urls: string[]; allSuccess: boolean }> {
-  // Indeed はスロット式で生成（Team A / Team B 共通経路）
-  if (platform === "indeed") {
-    return generateIndeedSlotThumbnails(request);
-  }
-
-  const config = PLATFORM_IMAGE_CONFIG[platform];
-  const referenceImage = request.referenceImage || null;
-  console.log(
-    `[thumbnail] ${platform}: 参考画像=${referenceImage ? `あり(${Math.round(referenceImage.length / 1024)}KB, images/edits使用)` : "なし(images/generations使用)"}`
-  );
-
-  let urls: string[] = [];
-  let allSuccess = false;
-
-  if (referenceImage) {
-    // 参考画像モード: 変化の軸が異なる3プロンプト × 各1枚（input-images 消費は計3枚分）
-    // プロンプトは参考画像ファーストの短文（Claudeのシーン描写はスキップ）
-    const refVariants: ReferenceVariant[] = ["faithful", "angle", "scene"];
-    const refResults = await Promise.allSettled(
-      refVariants.map((variant) =>
-        callGptImage(buildReferenceEditPrompt(request, variant), config.aspectRatio, [referenceImage], 1)
-      )
-    );
-    for (let i = 0; i < refResults.length; i++) {
-      if (refResults[i].status === "fulfilled") {
-        urls.push(...(refResults[i] as PromiseFulfilledResult<string[]>).value);
-      } else {
-        console.error(
-          `[gpt-image] ${platform}: 参考画像モード ${refVariants[i]} 生成失敗:`,
-          (refResults[i] as PromiseRejectedResult).reason
-        );
-      }
-    }
-    allSuccess = urls.length >= 3;
-  } else {
-    // 通常モード: Claude で3パターンのプロンプトを生成し並列実行
-    const variants: Array<"corporate" | "warm" | "dynamic"> = ["corporate", "warm", "dynamic"];
-    let prompts: GeneratedPrompts;
-    try {
-      prompts = await generateImagePromptsWithClaude(request, platform, config.aspectRatio);
-      console.log(`[thumbnail] ${platform}: Claude プロンプト生成成功`);
-    } catch (error) {
-      console.warn(`[thumbnail] ${platform}: Claude プロンプト生成失敗、フォールバック使用:`, error);
-      prompts = {
-        corporate: buildFallbackPrompt(request, "corporate"),
-        warm: buildFallbackPrompt(request, "warm"),
-        dynamic: buildFallbackPrompt(request, "dynamic"),
-      };
-    }
-
-    const variantPrompts = [prompts.corporate, prompts.warm, prompts.dynamic];
-    const results = await Promise.allSettled(
-      variantPrompts.map((prompt) => generateWithGptImage(prompt, config.aspectRatio))
-    );
-
-    const failedIndices: number[] = [];
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].status === "fulfilled") {
-        urls.push((results[i] as PromiseFulfilledResult<string>).value);
-      } else {
-        console.error(`[gpt-image] ${platform}/${variants[i]} failed:`, (results[i] as PromiseRejectedResult).reason);
-        failedIndices.push(i);
-      }
-    }
-
-    // 失敗分を1回だけリトライ（一時的なレート制限・5xx対策）
-    if (failedIndices.length > 0) {
-      console.log(`[gpt-image] ${platform}: ${failedIndices.length}枚失敗。リトライ...`);
-      const fallbackResults = await Promise.allSettled(
-        failedIndices.map((i) => generateWithGptImage(variantPrompts[i], config.aspectRatio))
-      );
-      for (const result of fallbackResults) {
-        if (result.status === "fulfilled") {
-          urls.push(result.value);
-        } else {
-          console.error(`[gpt-image] ${platform} retry also failed:`, result.reason);
-        }
-      }
-    }
-    allSuccess = failedIndices.length === 0;
-  }
-
-  // リサイズ・圧縮（PNG維持 + 高品質lanczos3）
-  const compressedUrls = await Promise.all(
-    urls.map((url) => compressImage(url, config.width, config.height))
-  );
-
-  return { urls: compressedUrls, allSuccess };
+  return { urls, allSuccess: urls.length === SLOT_NUMBERS.length };
 }
 
 // ---------- パブリックAPI ----------
-
-// 参考画像モード（AirWork / JobMedley 用）: マスター画像を生成し、対象媒体へクロップ配布する
-// OpenAI の input-images レート制限（5枚/分）は「n × 入力画像数」で消費されるため、
-// 媒体ごとに生成すると1分の枠に収まらない。マスター1回（3枚分）なら確実、かつ高速。
-// ※ Indeed はスロット式（generateIndeedSlotThumbnails）で生成するためここでは扱わない。
-async function generateReferenceThumbnails(
-  request: ThumbnailGenerationRequest,
-  referenceImage: string,
-  platforms: ("airwork" | "jobmedley")[],
-): Promise<{ airwork: string[]; jobmedley: string[]; allSuccess: boolean }> {
-  console.log(
-    `[thumbnail] 参考画像モード: マスター3種生成(3:2, 忠実/アングル違い/シーン違い) → ${platforms.join("/")}へクロップ配布 (参考画像 ${Math.round(referenceImage.length / 1024)}KB)`
-  );
-
-  // 変化の軸が異なる3プロンプト × 各1枚（input-images 消費は計3枚分で n=3 一括と同じ）
-  const variants: ReferenceVariant[] = ["faithful", "angle", "scene"];
-  const results = await Promise.allSettled(
-    variants.map((variant) =>
-      callGptImage(buildReferenceEditPrompt(request, variant), "3:2", [referenceImage], 1)
-    )
-  );
-
-  const masters: string[] = [];
-  for (let i = 0; i < results.length; i++) {
-    if (results[i].status === "fulfilled") {
-      masters.push(...(results[i] as PromiseFulfilledResult<string[]>).value);
-    } else {
-      console.error(
-        `[gpt-image] 参考画像モード: ${variants[i]} 生成失敗:`,
-        (results[i] as PromiseRejectedResult).reason
-      );
-    }
-  }
-
-  if (masters.length === 0) {
-    return { airwork: [], jobmedley: [], allSuccess: false };
-  }
-
-  const cropTo = (platform: "airwork" | "jobmedley") => {
-    if (!platforms.includes(platform)) return Promise.resolve([] as string[]);
-    const config = PLATFORM_IMAGE_CONFIG[platform];
-    return Promise.all(masters.map((url) => compressImage(url, config.width, config.height)));
-  };
-
-  const [airwork, jobmedley] = await Promise.all([cropTo("airwork"), cropTo("jobmedley")]);
-
-  return { airwork, jobmedley, allSuccess: masters.length >= 3 };
-}
 
 // メイン: 指定媒体分を並列生成（未指定は indeed / airwork / jobmedley の3媒体）
 export async function generatePlatformThumbnails(
@@ -731,49 +476,11 @@ export async function generatePlatformThumbnails(
     };
   }
 
-  // 参考画像あり:
-  // - Indeed はスロット式（事業所写真は3枚目のみ i2i、1・2枚目はテキスト生成）
-  // - AirWork / JobMedley はマスター生成 → クロップ配布（従来どおり）
-  if (request.referenceImage) {
-    const masterPlatforms = platforms.filter(
-      (p): p is "airwork" | "jobmedley" => p !== "indeed"
-    );
-    const [indeedResult, masterResult] = await Promise.all([
-      platforms.includes("indeed")
-        ? generateForPlatform(request, "indeed")
-        : Promise.resolve({ urls: [] as string[], allSuccess: true }),
-      masterPlatforms.length > 0
-        ? generateReferenceThumbnails(request, request.referenceImage, masterPlatforms)
-        : Promise.resolve({ airwork: [] as string[], jobmedley: [] as string[], allSuccess: true }),
-    ]);
-
-    const selected = {
-      indeed: indeedResult.urls,
-      airwork: masterResult.airwork,
-      jobmedley: masterResult.jobmedley,
-    };
-    const total = selected.indeed.length + selected.airwork.length + selected.jobmedley.length;
-
-    if (total === 0) {
-      return {
-        thumbnails: fallbackThumbnails(),
-        status: "error",
-        message: "参考画像ベースのサムネイル生成に失敗しました",
-      };
-    }
-
-    return {
-      thumbnails: { ...selected, hellowork: [] },
-      status: "success",
-      message: `参考画像を活用して${total}枚のサムネイルを生成しました（gpt-image-2）`,
-    };
-  }
-
   const skipped = { urls: [] as string[], allSuccess: true };
   const [indeedResult, airworkResult, jobmedleyResult] = await Promise.all([
-    platforms.includes("indeed") ? generateForPlatform(request, "indeed") : Promise.resolve(skipped),
-    platforms.includes("airwork") ? generateForPlatform(request, "airwork") : Promise.resolve(skipped),
-    platforms.includes("jobmedley") ? generateForPlatform(request, "jobmedley") : Promise.resolve(skipped),
+    platforms.includes("indeed") ? generateSlotThumbnails(request, "indeed") : Promise.resolve(skipped),
+    platforms.includes("airwork") ? generateSlotThumbnails(request, "airwork") : Promise.resolve(skipped),
+    platforms.includes("jobmedley") ? generateSlotThumbnails(request, "jobmedley") : Promise.resolve(skipped),
   ]);
 
   const totalGenerated =
@@ -803,7 +510,7 @@ export async function generatePlatformThumbnails(
   };
 }
 
-// 単一媒体用（Team B用）: 指定媒体のみ3枚生成
+// 単一媒体用（Team B用）: 指定媒体のみ5枚生成
 export async function generatePlatformThumbnailsSingle(
   request: ThumbnailGenerationRequest,
   platform: keyof typeof PLATFORM_IMAGE_CONFIG,
@@ -825,7 +532,7 @@ export async function generatePlatformThumbnailsSingle(
     };
   }
 
-  const result = await generateForPlatform(request, platform);
+  const result = await generateSlotThumbnails(request, platform);
 
   if (result.urls.length === 0) {
     const config = PLATFORM_IMAGE_CONFIG[platform];
@@ -925,4 +632,3 @@ export async function regenerateThumbnails(
     message: `${urls.length}枚のサムネイルを生成しました`,
   };
 }
-

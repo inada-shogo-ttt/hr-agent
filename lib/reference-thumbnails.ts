@@ -6,7 +6,7 @@ import { anthropic, LIGHT_MODEL } from "@/lib/claude";
 
 export interface ReferenceThumbnailRecord {
   id: string;
-  slot: 1 | 2 | 3;
+  slot: 1 | 2 | 3 | 4 | 5;
   url: string;
   storagePath: string;
   description: string | null;
@@ -18,9 +18,19 @@ export interface CompositionRefs {
   slot1: string | null;
   slot2: string | null;
   slot3: string | null;
+  slot4: string | null;
+  slot5: string | null;
 }
 
-const EMPTY_REFS: CompositionRefs = { slot1: null, slot2: null, slot3: null };
+const SLOT_NUMBERS = [1, 2, 3, 4, 5] as const;
+
+const EMPTY_REFS: CompositionRefs = {
+  slot1: null,
+  slot2: null,
+  slot3: null,
+  slot4: null,
+  slot5: null,
+};
 
 // AI 選定に渡す候補数の上限（スロットあたり。コスト・レイテンシ抑制）
 const MAX_CANDIDATES_PER_SLOT = 6;
@@ -64,6 +74,8 @@ async function pickWithClaude(
     1: "1枚目（クリック率重視のメインビジュアル。人物1名+キャッチコピー文字入り）",
     2: "2枚目（スタッフ2〜3名が楽しく働く職場の雰囲気）",
     3: "3枚目（事業所・職場空間の様子）",
+    4: "4枚目（待遇・数字訴求。数字コピーを載せられる構図）",
+    5: "5枚目（実際の業務の1コマ・働く人の仕事シーン）",
   };
 
   const content: ({ type: "text"; text: string } | { type: "image"; source: { type: "url"; url: string } })[] = [
@@ -151,20 +163,20 @@ export async function selectCompositionRefsForJob(job: {
       }
     }
 
-    const [slot1, slot2, slot3] = await Promise.all(
-      [1, 2, 3].map((slot) => {
+    const [slot1, slot2, slot3, slot4, slot5] = await Promise.all(
+      SLOT_NUMBERS.map((slot) => {
         const record = selected.get(slot);
         return record ? resolveToDataUrl(record.url) : Promise.resolve(null);
       })
     );
 
-    const pickedSlots = [slot1, slot2, slot3]
+    const pickedSlots = [slot1, slot2, slot3, slot4, slot5]
       .map((v, i) => (v ? i + 1 : null))
       .filter(Boolean);
     if (pickedSlots.length > 0) {
       console.log(`[reference-thumbnails] 参考サムネ選定完了: スロット ${pickedSlots.join(", ")}`);
     }
-    return { slot1, slot2, slot3 };
+    return { slot1, slot2, slot3, slot4, slot5 };
   } catch (e) {
     console.warn("[reference-thumbnails] 参考サムネの取得に失敗。参考なしで続行します:", e);
     return EMPTY_REFS;

@@ -1,0 +1,122 @@
+﻿テーブル物理名,テーブル論理名,カラムラベル,カラム,データ型,キー・制約,必須,データ例,統合元（旧ツール:旧テーブル.旧カラム）,備考
+Organization,組織（契約主体）マスタ,組織ID,id,uuid,PK / DEFAULT gen_random_uuid(),○,7cdf5ff5-4c7a-4733-8f9a-8a9ff2be2a34,採用エージェント:Organization.id,契約・課金・ログインの単位。他システムの法人・事業所マスタとの統合最優先候補
+Organization,組織（契約主体）マスタ,事業所ID（ログインコード）,code,text,UNIQUE,○,TTT001,採用エージェント:Organization.code,ログイン画面で入力するコード。他システムとの突合キー候補
+Organization,組織（契約主体）マスタ,組織名,name,text,,○,TTTグループ(運営),採用エージェント:Organization.name,
+Organization,組織（契約主体）マスタ,課金免除フラグ,billingExempt,boolean,DEFAULT false,○,true,採用エージェント:Organization.billingExempt,運営者組織は true
+Organization,組織（契約主体）マスタ,Stripe顧客ID,stripeCustomerId,text,,,cus_XXXXXXXX,採用エージェント:Organization.stripeCustomerId,未契約組織は NULL
+Organization,組織（契約主体）マスタ,StripeサブスクリプションID,stripeSubscriptionId,text,,,sub_XXXXXXXX,採用エージェント:Organization.stripeSubscriptionId,
+Organization,組織（契約主体）マスタ,契約プラン,plan,text,CHECK (starter/standard/pro),,standard,採用エージェント:Organization.plan,プラン定義本体はコード内定数（lib/billing/plans.ts）
+Organization,組織（契約主体）マスタ,課金状態,subscriptionStatus,text,,,active,採用エージェント:Organization.subscriptionStatus,active / past_due / canceled / NULL（コード内区分）
+Organization,組織（契約主体）マスタ,課金期間開始,currentPeriodStart,timestamptz,,,2026-07-01T00:00:00+09:00,採用エージェント:Organization.currentPeriodStart,
+Organization,組織（契約主体）マスタ,課金期間終了,currentPeriodEnd,timestamptz,,,2026-07-31T23:59:59+09:00,採用エージェント:Organization.currentPeriodEnd,
+Organization,組織（契約主体）マスタ,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-07-18T11:32:14+00:00,採用エージェント:Organization.createdAt,
+Organization,組織（契約主体）マスタ,更新日時,updatedAt,timestamptz,DEFAULT now(),○,2026-07-18T11:32:14+00:00,採用エージェント:Organization.updatedAt,
+User,ユーザー（ログインアカウント）マスタ,ユーザーID,id,uuid,PK,○,691f09b0-9b32-413c-beef-00bae6e76013,採用エージェント:User.id,Supabase Auth（auth.users）と同一ID。認証情報（パスワード）は Auth 側が保持
+User,ユーザー（ログインアカウント）マスタ,メールアドレス,email,text,,○,user01@example.com,採用エージェント:User.email,一意性は Supabase Auth 側で担保。他システムのアカウント統合キー候補
+User,ユーザー（ログインアカウント）マスタ,名前,name,text,,○,採用 花子,採用エージェント:User.name,実データには個人名でなく用途名（例: ○○掲載担当）を入れる運用も混在
+User,ユーザー（ログインアカウント）マスタ,ロール,role,text,CHECK (super_admin/admin/member),○,member,採用エージェント:User.role,3階層ロール。他システムの権限マスタと統合可能性あり
+User,ユーザー（ログインアカウント）マスタ,所属組織,orgId,uuid,FK(Organization.id),○,7cdf5ff5-4c7a-4733-8f9a-8a9ff2be2a34,採用エージェント:User.orgId,
+User,ユーザー（ログインアカウント）マスタ,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-03-29T15:39:06+00:00,採用エージェント:User.createdAt,updatedAt 列なし
+Office,事業所（施設）マスタ,事業所ID,id,uuid,PK / DEFAULT gen_random_uuid(),○,d4fc0f55-d3d0-42a5-9cf5-68b70451c609,採用エージェント:Office.id,他システムの事業所・施設マスタと統合可能性大
+Office,事業所（施設）マスタ,事業所名,name,text,,○,有料老人ホームたいよう本館,採用エージェント:Office.name,住所・電話等の属性列は無し（名称のみ）
+Office,事業所（施設）マスタ,登録者,createdBy,uuid,FK(User.id),,691f09b0-9b32-413c-beef-00bae6e76013,採用エージェント:Office.createdBy,
+Office,事業所（施設）マスタ,所属組織,orgId,uuid,FK(Organization.id),○,7cdf5ff5-4c7a-4733-8f9a-8a9ff2be2a34,採用エージェント:Office.orgId,
+Office,事業所（施設）マスタ,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-03-29T16:54:15+00:00,採用エージェント:Office.createdAt,
+JobType,職種マスタ,職種ID,id,uuid,PK / DEFAULT gen_random_uuid(),○,f1f47d99-fd2a-4f27-b9ed-5e6abc2ded60,採用エージェント:JobType.id,設定画面（/settings/job-types）で管理
+JobType,職種マスタ,職種名,name,text,,○,在宅看護,採用エージェント:JobType.name,初期設計では UNIQUE。マルチテナント化後の組織単位一意性は実DB要確認
+JobType,職種マスタ,職種カラー,color,text,DEFAULT '#6b7280',○,#3b82f6,採用エージェント:JobType.color,migration SQL に無い実DB独自カラム。選択肢は画面内20色パレット（コード内定数）
+JobType,職種マスタ,所属組織,orgId,uuid,FK(Organization.id),○,7cdf5ff5-4c7a-4733-8f9a-8a9ff2be2a34,採用エージェント:JobType.orgId,グローバルマスタでなく組織別マスタ
+JobType,職種マスタ,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-03-29T16:52:21+00:00,採用エージェント:JobType.createdAt,
+EmploymentType,勤務形態マスタ,勤務形態ID,id,uuid,PK / DEFAULT gen_random_uuid(),○,9cfc89c6-40d5-4616-a864-3ac2eacb9cfc,採用エージェント:EmploymentType.id,設定画面（/settings/employment-types）で管理
+EmploymentType,勤務形態マスタ,勤務形態名,name,text,,○,正社員,採用エージェント:EmploymentType.name,コード内の雇用形態列挙（types/job-posting.ts）と二重管理
+EmploymentType,勤務形態マスタ,所属組織,orgId,uuid,FK(Organization.id),○,7cdf5ff5-4c7a-4733-8f9a-8a9ff2be2a34,採用エージェント:EmploymentType.orgId,組織別マスタ
+EmploymentType,勤務形態マスタ,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-03-29T16:53:23+00:00,採用エージェント:EmploymentType.createdAt,
+(コード内定数),権限ロール区分,ロール,UserRole,text（列挙）,User.role の CHECK 制約と二重定義,,super_admin / admin / member,採用エージェント:(コード内定数).UserRole,types/auth.ts。コード内ハードコードのためテーブル化推奨。他システムの役職・権限マスタと統合可能性あり
+(コード内定数),媒体（求人媒体）マスタ,媒体,Platform,text（列挙）,,,indeed / airwork / jobmedley / hellowork,採用エージェント:(コード内定数).Platform,types/platform.ts。表示名（Indeed/Airワーク等）は各画面に分散ハードコード。PlatformGuideline.platform の CHECK にも重複定義。テーブル化推奨
+(コード内定数),料金プランマスタ,プラン定義,PLANS,jsonb相当（定数オブジェクト）,,,starter=ライト(月額4980円・クレジット2400円・1席) / standard=スタンダード(14800円・9600円・5席) / pro=プロ(39800円・40000円・無制限),採用エージェント:(コード内定数).PLANS,lib/billing/plans.ts。超過単価・Stripe Price ID 環境変数名も保持。改定履歴を持てないためテーブル化推奨
+(コード内定数),実行種別・基準単価区分,実行種別,UsageKind / BASE_UNIT_PRICE_YEN,text（列挙）,,,team_a=800円 / team_b=400円,採用エージェント:(コード内定数).UsageKind,types/organization.ts・lib/billing/plans.ts。UsageLog.kind の CHECK と二重定義
+(コード内定数),求人ステータス区分,ステータス,Job.status,text（列挙）,,,draft,採用エージェント:(コード内定数).JobStatus,現行コードは draft のみ使用。旧承認フロー値（in_review/approved/published/rejected）は廃止済みだが実DBに残存値の可能性。要検討: ステータス管理が実質未使用
+(コード内定数),雇用形態区分,雇用形態,EmploymentType（型）,text（列挙）,,,正社員 / パート・アルバイト / 契約社員 / 派遣社員 / 業務委託 / インターン,採用エージェント:(コード内定数).EmploymentType,types/job-posting.ts。DBの EmploymentType マスタ（組織別・自由登録）と二重管理。統合時に正規化推奨
+(コード内定数),業種マスタ,業種,INDUSTRIES,text（列挙・10種）,,,医療・介護 / IT・通信 / 飲食・フード / 小売・販売 / 事務・管理 / 営業 / 建設・製造 / 教育・保育 / 運輸・物流 / サービス・接客,採用エージェント:(コード内定数).INDUSTRIES,lib/smart-defaults.ts。テーブル化推奨
+(コード内定数),職種カテゴリマスタ,職種カテゴリ,JOB_CATEGORIES,jsonb相当（業種→職種[]）,,,医療・介護=看護師 / 介護士・ヘルパー / 医療事務 / 薬剤師 / 理学療法士・作業療法士 ほか,採用エージェント:(コード内定数).JOB_CATEGORIES,lib/smart-defaults.ts。業種×職種の2階層。DBの JobType マスタと表記非連動。職種マスタへ一本化推奨
+(コード内定数),都道府県マスタ,都道府県,Prefecture,text（列挙・47件）,,,北海道 / 東京都 / 大阪府 ほか47都道府県,採用エージェント:(コード内定数).Prefecture,types/job-posting.ts。全システム共通の汎用マスタとして統合可能
+(コード内定数),給与種別区分,給与種別,salaryType,text（列挙）,,,時給 / 日給 / 月給 / 年収,採用エージェント:(コード内定数).salaryType,types/job-posting.ts CommonJobInfo
+(コード内定数),給与表示方法区分,給与の表示方法,SalaryDisplayType,text（列挙）,,,範囲表示 / 下限表示 / 固定額表示,採用エージェント:(コード内定数).SalaryDisplayType,types/job-posting.ts。Indeed・Airワーク必須項目
+(コード内定数),受動喫煙対策区分,受動喫煙対策,SmokingPolicy,text（列挙・6種）,,,屋内全面禁煙 / 屋内禁煙（喫煙専用室あり） / 喫煙可 / 対策なし ほか,採用エージェント:(コード内定数).SmokingPolicy,types/job-posting.ts。厚労省カテゴリ準拠
+(コード内定数),社会保険区分,社会保険,socialInsurance,text[]（列挙）,,,雇用保険 / 労災保険 / 健康保険 / 厚生年金,採用エージェント:(コード内定数).socialInsurance,lib/smart-defaults.ts の既定値として列挙。要検討: 入力上は自由配列
+(コード内定数),JobMedley施設種別区分,施設種別,JobMedleyFacilityType,text（列挙・15種）,,,クリニック / 病院 / 介護施設（特養・老健） / デイサービス / 訪問介護・看護 ほか,採用エージェント:(コード内定数).JobMedleyFacilityType,types/job-posting.ts。医療介護福祉特化
+(コード内定数),ハローワーク求人区分,求人区分,HelloWorkJobCategory,text（列挙）,,,一般 / 新卒等 / 季節 / 出稼ぎ,採用エージェント:(コード内定数).HelloWorkJobCategory,types/job-posting.ts
+(コード内定数),ハローワーク雇用期間区分,雇用期間,HelloWorkEmploymentPeriodType,text（列挙）,,,定めなし / 定めあり（4ヶ月以上） / 定めあり（4ヶ月未満） / 日雇,採用エージェント:(コード内定数).HelloWorkEmploymentPeriodType,types/job-posting.ts
+(コード内定数),ハローワーク公開範囲区分,求人公開範囲,HelloWorkPublishingScope,text（列挙・4種）,,,1.求人情報を公開する（事業所名等を含む） ほか,採用エージェント:(コード内定数).HelloWorkPublishingScope,types/job-posting.ts
+(コード内定数),学歴区分,学歴,educationLevel,text（列挙）,,,不問 / 高校 / 専門 / 短大・高専 / 大学 / 大学院,採用エージェント:(コード内定数).educationLevel,types/job-posting.ts（ハローワーク用）
+(コード内定数),選考方法区分,選考方法,selectionMethods,text[]（列挙）,,,面接 / 書類選考 / 適性検査 / 実技試験,採用エージェント:(コード内定数).selectionMethods,types/job-posting.ts（ハローワーク用・複数選択）
+(コード内定数),応募方法区分（ハローワーク）,応募方法,applicationMethod,text[]（列挙）,,,ハローワーク紹介状 / マイページ応募 / 電話 / 郵送,採用エージェント:(コード内定数).applicationMethodHW,types/job-posting.ts
+(コード内定数),応募経路区分（Indeed）,応募経路,applicationMethod,text（列挙）,,,Indeed応募 / 外部URL,採用エージェント:(コード内定数).applicationMethodIndeed,types/job-posting.ts
+(コード内定数),応募受付方法区分（AirWork）,応募受付方法,applicationReceiveMethod,text[]（列挙）,,,メール / Web / 電話,採用エージェント:(コード内定数).applicationReceiveMethod,types/job-posting.ts（必須・複数可）
+(コード内定数),勤務期間区分（AirWork）,勤務期間,workPeriod,text（列挙）,,,長期 / 短期,採用エージェント:(コード内定数).workPeriod,types/job-posting.ts
+(コード内定数),交通費支給区分（AirWork）,交通費,commuteAllowance,text（列挙）,,,全額支給 / 上限あり / なし,採用エージェント:(コード内定数).commuteAllowance,types/job-posting.ts
+(コード内定数),マイカー通勤区分（ハローワーク）,マイカー通勤,carCommute,text（列挙）,,,可 / 不可,採用エージェント:(コード内定数).carCommute,types/job-posting.ts
+(コード内定数),職種カラーパレット,職種色,COLOR_PALETTE,text（列挙・20色）,,,#ef4444 / #3b82f6 / #6b7280 ほか20色,採用エージェント:(コード内定数).COLOR_PALETTE,app/settings/job-types/page.tsx。JobType.color の選択肢。色区分マスタ化候補
+(コード内定数),参考サムネイルスロット区分,スロット,slot,integer（列挙）,,,1=クリック率重視 / 2=職場の雰囲気 / 3=事業所の様子,採用エージェント:(コード内定数).thumbnailSlot,app/settings/reference-thumbnails/page.tsx・lib/reference-thumbnails.ts。ReferenceThumbnail.slot の意味定義
+(コード内定数),ナレッジ種別区分,パターン種別,KnowledgeType,text（列挙）,,,structure_pattern / appeal_point / tone / keyword / section_rule,採用エージェント:(コード内定数).KnowledgeType,types/shared-knowledge.ts
+(コード内定数),媒体別原稿フィールド定義,フィールド定義,PLATFORM_FIELDS,jsonb相当（媒体→key/label[]）,,,indeed.jobTitle=職種名（正式名称・1求人1職種） ほか,採用エージェント:(コード内定数).PLATFORM_FIELDS,lib/platform-fields.ts。媒体×原稿項目のラベル・入力仕様。要検討: 項目マスタとして統合するか媒体固有仕様として本システム保持か
+Job,求人（事業所×職種×勤務形態）,求人ID,id,text,PK,○,96f67efd-afa4-49a2-bfe6-9bcfd5a73e07,採用エージェント:Job.id,UUID文字列をアプリ側発行（uuid型でない点に注意）。要検討: 求人ポジション定義としてマスタ性はあるが生成履歴の親でもある
+Job,求人（事業所×職種×勤務形態）,事業所,officeId,uuid,FK(Office.id) / 設計上 UNIQUE(officeId+jobTypeId+employmentTypeId),○,d4fc0f55-d3d0-42a5-9cf5-68b70451c609,採用エージェント:Job.officeId,事業所削除時 CASCADE
+Job,求人（事業所×職種×勤務形態）,職種,jobTypeId,uuid,FK(JobType.id),○,f1f47d99-fd2a-4f27-b9ed-5e6abc2ded60,採用エージェント:Job.jobTypeId,
+Job,求人（事業所×職種×勤務形態）,勤務形態,employmentTypeId,uuid,FK(EmploymentType.id),○,9cfc89c6-40d5-4616-a864-3ac2eacb9cfc,採用エージェント:Job.employmentTypeId,
+Job,求人（事業所×職種×勤務形態）,所属組織,orgId,uuid,FK(Organization.id),○,7cdf5ff5-4c7a-4733-8f9a-8a9ff2be2a34,採用エージェント:Job.orgId,事業所の orgId を継承（過去に不整合修復の migration あり）
+Job,求人（事業所×職種×勤務形態）,ステータス,status,text,DEFAULT 'draft',○,draft,採用エージェント:Job.status,区分値はコード内定数（求人ステータス区分）参照
+Job,求人（事業所×職種×勤務形態）,作成者,createdBy,uuid,FK(User.id),,691f09b0-9b32-413c-beef-00bae6e76013,採用エージェント:Job.createdBy,
+Job,求人（事業所×職種×勤務形態）,作成日時,createdAt,timestamp,DEFAULT CURRENT_TIMESTAMP,○,2026-07-22T06:08:33,採用エージェント:Job.createdAt,timezone なし型（他テーブルの timestamptz と混在）
+Job,求人（事業所×職種×勤務形態）,更新日時,updatedAt,timestamp,,○,2026-07-22T06:08:33,採用エージェント:Job.updatedAt,
+PlatformGuideline,媒体別生成ガイドライン設定,媒体,platform,text,PK / CHECK (indeed/airwork/jobmedley/hellowork),○,indeed,採用エージェント:PlatformGuideline.platform,全組織共通のシステム設定。super_admin のみ編集（/settings/platform-guidelines）
+PlatformGuideline,媒体別生成ガイドライン設定,出力フォーマット,format,text,DEFAULT '',○,### タイトル（jobTitle）…（長文テンプレート）,採用エージェント:PlatformGuideline.format,空欄時は lib/platform-guidelines/defaults.ts のコード内デフォルトで動作
+PlatformGuideline,媒体別生成ガイドライン設定,アルゴリズム前提知識,algorithm,text,DEFAULT '',○,## Indeedアルゴリズムの前提知識…（長文）,採用エージェント:PlatformGuideline.algorithm,同上
+PlatformGuideline,媒体別生成ガイドライン設定,制約条件,constraints,text,DEFAULT '',○,## 表現ルール（CVRを高める）…（長文）,採用エージェント:PlatformGuideline.constraints,同上。constraints は予約語のため要注意
+PlatformGuideline,媒体別生成ガイドライン設定,最終更新者,updatedBy,text,,,2a0778c0-775c-4e63-…,採用エージェント:PlatformGuideline.updatedBy,User.id を text で保持（FK制約なし）
+PlatformGuideline,媒体別生成ガイドライン設定,更新日時,updatedAt,timestamptz,DEFAULT now(),○,2026-07-24T20:17:33+00:00,採用エージェント:PlatformGuideline.updatedAt,
+SystemReferencePosting,システム参考原稿マスタ,参考原稿ID,id,text,PK,○,4134eda6-c8c6-44b2-83a1-f51c0ec024eb,採用エージェント:SystemReferencePosting.id,全組織共通。super_admin のみ編集（/settings/system-references）。旧 ReferencePosting から移行
+SystemReferencePosting,システム参考原稿マスタ,タイトル,title,text,,○,介護職応募殺到バージョン,採用エージェント:SystemReferencePosting.title,
+SystemReferencePosting,システム参考原稿マスタ,媒体,platform,text,,○,indeed,採用エージェント:SystemReferencePosting.platform,媒体区分（コード内定数）参照。CHECK 制約なし
+SystemReferencePosting,システム参考原稿マスタ,業種,industry,text,,,介護業界,採用エージェント:SystemReferencePosting.industry,自由入力。業種マスタ（コード内定数）と非連動
+SystemReferencePosting,システム参考原稿マスタ,職種,jobType,text,,,日勤のみ介護職,採用エージェント:SystemReferencePosting.jobType,自由入力。JobType マスタと非連動
+SystemReferencePosting,システム参考原稿マスタ,原稿データ,postingData,text,,○,"{""jobTitle"":""介護スタッフ（住宅型有料老人ホーム）""…}",採用エージェント:SystemReferencePosting.postingData,JSON文字列で原稿一式を保持
+SystemReferencePosting,システム参考原稿マスタ,実績メモ,performance,text,,,応募2週間で4件/保存10件,採用エージェント:SystemReferencePosting.performance,
+SystemReferencePosting,システム参考原稿マスタ,登録者,createdBy,text,,,2a0778c0-775c-4e63-…,採用エージェント:SystemReferencePosting.createdBy,User.id を text で保持。移行コピー分は NULL
+SystemReferencePosting,システム参考原稿マスタ,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-04-18T08:30:08+00:00,採用エージェント:SystemReferencePosting.createdAt,
+ReferenceThumbnail,参考サムネイルマスタ,参考画像ID,id,uuid,PK / DEFAULT gen_random_uuid(),○,3c71c81b-bee0-45b4-a724-628bb251d2f9,採用エージェント:ReferenceThumbnail.id,全組織共通。管理者が設定画面（/settings/reference-thumbnails）で登録・削除
+ReferenceThumbnail,参考サムネイルマスタ,スロット,slot,integer,CHECK (1〜3),○,1,採用エージェント:ReferenceThumbnail.slot,1=クリック率重視 / 2=職場の雰囲気 / 3=事業所の様子（意味定義はコード内定数）
+ReferenceThumbnail,参考サムネイルマスタ,公開URL,url,text,,○,https://<project>.supabase.co/storage/v1/object/public/thumbnails/reference-thumbnails/slot1/xxxx.png,採用エージェント:ReferenceThumbnail.url,Supabase Storage 公開URL
+ReferenceThumbnail,参考サムネイルマスタ,ストレージパス,storagePath,text,,○,reference-thumbnails/slot1/xxxx.png,採用エージェント:ReferenceThumbnail.storagePath,削除用パス
+ReferenceThumbnail,参考サムネイルマスタ,メモ,description,text,,,介護向け・文字大きめ,採用エージェント:ReferenceThumbnail.description,AI自動選定の補助情報
+ReferenceThumbnail,参考サムネイルマスタ,登録者,createdBy,uuid,,,2a0778c0-775c-4e63-…,採用エージェント:ReferenceThumbnail.createdBy,FK制約なし
+ReferenceThumbnail,参考サムネイルマスタ,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-07-18T14:32:55+00:00,採用エージェント:ReferenceThumbnail.createdAt,
+SharedKnowledge,共有ナレッジベース,ナレッジID,id,uuid,PK / DEFAULT gen_random_uuid(),○,（実DB未作成）,採用エージェント:SharedKnowledge.id,要検討: 全組織共有の成功パターン集。自動抽出される派生データでありマスタ性は低いが他システム共有価値あり。migration SQL はあるが実DBに未作成
+SharedKnowledge,共有ナレッジベース,職種カテゴリ,category,text,,○,介護職,採用エージェント:SharedKnowledge.category,自由文字列。職種マスタと非連動
+SharedKnowledge,共有ナレッジベース,媒体,platform,text,,○,indeed,採用エージェント:SharedKnowledge.platform,
+SharedKnowledge,共有ナレッジベース,パターン種別,knowledgeType,text,,○,structure_pattern,採用エージェント:SharedKnowledge.knowledgeType,区分値はコード内定数（KnowledgeType）
+SharedKnowledge,共有ナレッジベース,ルール本文,content,text,,○,「1日の流れ」セクションを冒頭に置くと応募率が高い,採用エージェント:SharedKnowledge.content,匿名化済み本文
+SharedKnowledge,共有ナレッジベース,成功例,example,text,,,朝礼→送迎→入浴介助…,採用エージェント:SharedKnowledge.example,
+SharedKnowledge,共有ナレッジベース,エビデンス件数,evidenceCount,integer,DEFAULT 1,○,3,採用エージェント:SharedKnowledge.evidenceCount,
+SharedKnowledge,共有ナレッジベース,平均効果スコア,avgImpactScore,real,DEFAULT 0,○,0.42,採用エージェント:SharedKnowledge.avgImpactScore,-1.0〜1.0
+SharedKnowledge,共有ナレッジベース,合計表示回数,totalImpressions,integer,DEFAULT 0,○,12000,採用エージェント:SharedKnowledge.totalImpressions,
+SharedKnowledge,共有ナレッジベース,合計クリック数,totalClicks,integer,DEFAULT 0,○,480,採用エージェント:SharedKnowledge.totalClicks,
+SharedKnowledge,共有ナレッジベース,合計応募数,totalApplications,integer,DEFAULT 0,○,24,採用エージェント:SharedKnowledge.totalApplications,
+SharedKnowledge,共有ナレッジベース,作成日時,createdAt,timestamptz,DEFAULT now(),○,2026-07-01T00:00:00+00:00,採用エージェント:SharedKnowledge.createdAt,
+SharedKnowledge,共有ナレッジベース,更新日時,updatedAt,timestamptz,DEFAULT now(),○,2026-07-01T00:00:00+00:00,採用エージェント:SharedKnowledge.updatedAt,
+TeamBMemory,改善パターン学習メモリ,メモリID,id,uuid,PK / DEFAULT gen_random_uuid(),○,9c4982be-2fca-4478-8cf7-19cd1fd3ce64,採用エージェント:TeamBMemory.id,要検討: 自動蓄積の学習データでありマスタ性は低い。カラム命名が snake_case で他テーブルと不統一
+TeamBMemory,改善パターン学習メモリ,所属組織,orgId,uuid,FK(Organization.id),○,7cdf5ff5-4c7a-4733-8f9a-8a9ff2be2a34,採用エージェント:TeamBMemory.orgId,
+TeamBMemory,改善パターン学習メモリ,媒体,platform,text,,○,indeed,採用エージェント:TeamBMemory.platform,
+TeamBMemory,改善パターン学習メモリ,カテゴリ,category,text,,○,職種名（正式名称・1求人1職種）,採用エージェント:TeamBMemory.category,PLATFORM_FIELDS のフィールドラベルが入る
+TeamBMemory,改善パターン学習メモリ,改善パターン,pattern,text,,○,月給先頭配置で期待値一致・応募率向上,採用エージェント:TeamBMemory.pattern,
+TeamBMemory,改善パターン学習メモリ,コンテキスト,context,text,,,indeedの職種名フィールドの改善,採用エージェント:TeamBMemory.context,
+TeamBMemory,改善パターン学習メモリ,改善前例,example_before,text,,,⭕2026年8月オープニングスタッフ⭕,採用エージェント:TeamBMemory.example_before,
+TeamBMemory,改善パターン学習メモリ,改善後例,example_after,text,,,⭕月給25.9万円〜・オープニングスタッフ⭕,採用エージェント:TeamBMemory.example_after,
+TeamBMemory,改善パターン学習メモリ,効果スコア,effectiveness_score,real,DEFAULT 0,,0,採用エージェント:TeamBMemory.effectiveness_score,-1〜1。CTR比較で自動更新
+TeamBMemory,改善パターン学習メモリ,利用回数,usage_count,integer,DEFAULT 1,,1,採用エージェント:TeamBMemory.usage_count,
+TeamBMemory,改善パターン学習メモリ,成功回数,success_count,integer,DEFAULT 0,,0,採用エージェント:TeamBMemory.success_count,
+TeamBMemory,改善パターン学習メモリ,元求人,source_job_id,text,FK(Job.id),,603baf7c-d287-4d6d-8b4e-7f6ac54729e4,採用エージェント:TeamBMemory.source_job_id,
+TeamBMemory,改善パターン学習メモリ,業界,industry,text,,,介護,採用エージェント:TeamBMemory.industry,自由文字列
+TeamBMemory,改善パターン学習メモリ,職種,job_type,text,,,介護職,採用エージェント:TeamBMemory.job_type,自由文字列。JobType マスタと非連動
+TeamBMemory,改善パターン学習メモリ,作成日時,createdAt,timestamptz,DEFAULT now(),,2026-07-18T19:17:00+00:00,採用エージェント:TeamBMemory.createdAt,
+TeamBMemory,改善パターン学習メモリ,更新日時,updatedAt,timestamptz,DEFAULT now(),,2026-07-18T19:17:00+00:00,採用エージェント:TeamBMemory.updatedAt,
